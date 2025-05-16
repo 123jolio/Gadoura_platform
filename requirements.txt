@@ -13,6 +13,6 @@ scikit-image
 simplekml
 requests
 openpyxl
-streamlit-drawable-canvas 
+streamlit-drawable-canvas
 xlsxwriter
-matplotlib
+
