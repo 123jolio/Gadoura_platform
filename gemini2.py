@@ -719,41 +719,51 @@ def run_lake_processing_app(waterbody: str, index_name: str):
             st.subheader("Ανάλυση Δείγματος Εικόνας")
             expander_col3, expander_col4 = st.columns(2)
 
-            with expander_col3:
-                with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
-                    average_sample_img_display = None
-                    if display_option_val.lower() == "thresholded":
-    filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
-    if filtered_stack_for_avg.shape[0] > 0: # Check if there are any images after filtering
-        # Check if all values along axis 0 are NaN for all pixels.
-        # If so, nanmean will return all NaNs and warn.
-        # We can pre-emptively handle or let nanmean do its job and handle NaNs later in plotting.
-        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0)
-    else:
-        # Handle case where filtered_stack_for_avg is empty (e.g., no images matched criteria)
-        # Create an empty or NaN-filled array of the correct shape if needed by downstream code
-        # Assuming STACK has shape (num_images, height, width)
-        # and stack_filt would have (filtered_num_images, height, width)
-        # average_sample_img_display should have shape (height, width)
-        if STACK is not None and STACK.ndim == 3:
-            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-        else: # Fallback if STACK shape is unknown or None
-            average_sample_img_display = np.array([[]], dtype=float) # Or some other sensible default
-        st.caption("No data available for 'Thresholded' average sample after filtering.")
+           with expander_col3:
+    with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
+        average_sample_img_display = None  # Αρχικοποίηση
 
-else: # Original
-    if stack_filt.shape[0] > 0: # Check if there are any images after filtering
-        average_sample_img_display = np.nanmean(stack_filt, axis=0)
-    else:
-        if STACK is not None and STACK.ndim == 3:
-            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-        else:
-            average_sample_img_display = np.array([[]], dtype=float)
-        st.caption("No data available for 'Original' average sample after filtering.")
+        if display_option_val.lower() == "thresholded":
+            # Υπολογισμός μόνο αν υπάρχει το stack_filt και δεν είναι None
+            if 'stack_filt' in locals() and stack_filt is not None:
+                filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
+                # Έλεγχος αν το filtered_stack_for_avg έχει δεδομένα πριν τον υπολογισμό του μέσου όρου
+                if filtered_stack_for_avg.shape[0] > 0:
+                    average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0)
+                else:
+                    # Αν δεν υπάρχουν δεδομένα μετά το φιλτράρισμα, χειρίσου το κατάλληλα
+                    if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                        average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+                    # st.caption("No data for 'Thresholded' average after filtering this specific path.") # Προαιρετικό μήνυμα
+            else:
+                # Αν το stack_filt δεν υπάρχει ή είναι None (από προηγούμενο φιλτράρισμα)
+                if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                    average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+                # st.caption("Initial stack_filt was empty or None for 'Thresholded'.") # Προαιρετικό μήνυμα
 
-                    if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
-                        avg_min_disp = float(np.nanmin(average_sample_img_display))
-                        avg_max_disp = float(np.nanmax(average_sample_img_display))
+        else:  # Original
+            # Υπολογισμός μόνο αν υπάρχει το stack_filt, δεν είναι None, και έχει δεδομένα
+            if 'stack_filt' in locals() and stack_filt is not None and stack_filt.shape[0] > 0:
+                average_sample_img_display = np.nanmean(stack_filt, axis=0)
+            else:
+                # Αν το stack_filt δεν υπάρχει, είναι None, ή είναι άδειο
+                if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                    average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+                # st.caption("No data for 'Original' average (stack_filt empty or None).") # Προαιρετικό μήνυμα
+
+        # Έλεγχος και εμφάνιση του αποτελέσματος
+        if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
+            # Έλεγχος αν το array έχει μη-NaN τιμές και δεν είναι απλά ένα άδειο array από το np.array([[]])
+            if average_sample_img_display.size > 0 : # Εξασφαλίζει ότι δεν είναι shape (0,) ή παρόμοιο
+                try:
+                    avg_min_disp = float(np.nanmin(average_sample_img_display))
+                    avg_max_disp = float(np.nanmax(average_sample_img_display))
+
+                    # Επιπλέον έλεγχος για την περίπτωση που avg_min_disp == avg_max_disp (π.χ. σταθερή εικόνα)
+                    # ή αν κάποιο από αυτά είναι NaN (αν και το np.all(np.isnan) θα έπρεπε να το έχει πιάσει)
+                    if np.isnan(avg_min_disp) or np.isnan(avg_max_disp):
+                         st.caption("Δεν υπάρχουν έγκυρες τιμές για την οπτικοποίηση του 'Μέσου Δείγματος Εικόνας'.")
+                    else:
                         fig_sample_disp = px.imshow(average_sample_img_display, color_continuous_scale="jet",
                                                     range_color=[avg_min_disp, avg_max_disp] if avg_min_disp < avg_max_disp else None,
                                                     labels={"color": "Τιμή Pixel"})
@@ -761,9 +771,12 @@ else: # Original
                         df_avg_sample_display = pd.DataFrame(average_sample_img_display)
                         add_excel_download_button(df_avg_sample_display, common_filename_prefix, "Average_Sample_Map", f"excel_avg_sample_map{key_suffix}")
                         st.caption(f"Μέση τιμή pixel (εμφάνιση: {display_option_val}).")
-                    else:
-                        st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")
-            
+                except Exception as e: # Πιάνει πιθανά σφάλματα από nanmin/nanmax αν το array είναι προβληματικό
+                    st.caption(f"Σφάλμα κατά την προετοιμασία του γραφήματος 'Μέσου Δείγματος Εικόνας': {e}")
+            else: # average_sample_img_display.size == 0
+                 st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας' (κενό μέγεθος πίνακα).")
+        else: # average_sample_img_display is None or all NaN
+            st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")            
             with expander_col4:
                 with st.expander("Χάρτης: Χρόνος Μέγιστης Εμφάνισης εντός Εύρους", expanded=True):
                     stack_for_time_max = np.where(in_range_bool_mask, stack_filt, np.nan) 
