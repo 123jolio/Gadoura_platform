@@ -718,10 +718,10 @@ def run_lake_processing_app(waterbody: str, index_name: str):
 
             st.subheader("Ανάλυση Δείγματος Εικόνας")
             expander_col3, expander_col4 = st.columns(2)
-
+           
            with expander_col3:
-    with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
-        average_sample_img_display = None  # Αρχικοποίηση
+              with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
+                 average_sample_img_display = None  # Αρχικοποίηση
 
         if display_option_val.lower() == "thresholded":
             # Υπολογισμός μόνο αν υπάρχει το stack_filt και δεν είναι None
