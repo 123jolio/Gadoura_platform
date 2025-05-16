@@ -723,10 +723,33 @@ def run_lake_processing_app(waterbody: str, index_name: str):
                 with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
                     average_sample_img_display = None
                     if display_option_val.lower() == "thresholded":
-                        filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
-                        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0)
-                    else: # Original
-                        average_sample_img_display = np.nanmean(stack_filt, axis=0)
+    filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
+    if filtered_stack_for_avg.shape[0] > 0: # Check if there are any images after filtering
+        # Check if all values along axis 0 are NaN for all pixels.
+        # If so, nanmean will return all NaNs and warn.
+        # We can pre-emptively handle or let nanmean do its job and handle NaNs later in plotting.
+        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0)
+    else:
+        # Handle case where filtered_stack_for_avg is empty (e.g., no images matched criteria)
+        # Create an empty or NaN-filled array of the correct shape if needed by downstream code
+        # Assuming STACK has shape (num_images, height, width)
+        # and stack_filt would have (filtered_num_images, height, width)
+        # average_sample_img_display should have shape (height, width)
+        if STACK is not None and STACK.ndim == 3:
+            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+        else: # Fallback if STACK shape is unknown or None
+            average_sample_img_display = np.array([[]], dtype=float) # Or some other sensible default
+        st.caption("No data available for 'Thresholded' average sample after filtering.")
+
+else: # Original
+    if stack_filt.shape[0] > 0: # Check if there are any images after filtering
+        average_sample_img_display = np.nanmean(stack_filt, axis=0)
+    else:
+        if STACK is not None and STACK.ndim == 3:
+            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+        else:
+            average_sample_img_display = np.array([[]], dtype=float)
+        st.caption("No data available for 'Original' average sample after filtering.")
 
                     if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
                         avg_min_disp = float(np.nanmin(average_sample_img_display))
