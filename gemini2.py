@@ -740,28 +740,41 @@ def run_lake_processing_app(waterbody: str, index_name: str):
         with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
             average_sample_img_display = None  # Αρχικοποίηση
 
+            # Αυτό είναι μέσα στο: with expander_col3:
+            #                     with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
+            average_sample_img_display = None  # Αρχικοποίηση στην αρχή του expander
+
             if display_option_val.lower() == "thresholded":
                 if 'stack_filt' in locals() and stack_filt is not None:
                     filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
-                    if filtered_stack_for_avg.shape[0] > 0:
-                        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0)
+                    
+                    # Έλεγχος αν υπάρχουν καθόλου δεδομένα και αν υπάρχει τουλάχιστον μία μη-NaN τιμή
+                    if filtered_stack_for_avg.shape[0] > 0 and np.any(~np.isnan(filtered_stack_for_avg)):
+                        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0) # Αυτή είναι η γραμμή 747 (ή κοντά)
                     else:
+                        # Δεν υπάρχουν δεδομένα ή είναι όλα NaN
                         if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
                             average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-                        # else: average_sample_img_display παραμένει None ή μια default τιμή όπως np.array([])
-                else:
+                        # (Το st.caption μπορεί να μπει εδώ ή μετά την εμφάνιση)
+                else: # stack_filt δεν υπάρχει ή είναι None
                     if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
                         average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-                    # else: average_sample_img_display παραμένει None
 
             else:  # Original
-                if 'stack_filt' in locals() and stack_filt is not None and stack_filt.shape[0] > 0:
-                    average_sample_img_display = np.nanmean(stack_filt, axis=0)
-                else:
+                if 'stack_filt' in locals() and stack_filt is not None:
+                    # Έλεγχος αν υπάρχουν καθόλου δεδομένα και αν υπάρχει τουλάχιστον μία μη-NaN τιμή
+                    if stack_filt.shape[0] > 0 and np.any(~np.isnan(stack_filt)):
+                        average_sample_img_display = np.nanmean(stack_filt, axis=0) # Αυτή είναι η γραμμή 747 (ή κοντά)
+                    else:
+                        # Δεν υπάρχουν δεδομένα ή είναι όλα NaN
+                        if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+                else: # stack_filt δεν υπάρχει ή είναι None
                     if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
                         average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-                    # else: average_sample_img_display παραμένει None
 
+            # Ο υπόλοιπος κώδικας για την εμφάνιση (if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)): ...)
+            # παραμένει όπως τον είχατε ή όπως τον διορθώσαμε προηγουμένως.
             # Έλεγχος και εμφάνιση του αποτελέσματος
             if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
                 if average_sample_img_display.size > 0:
