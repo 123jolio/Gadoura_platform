@@ -27,29 +27,31 @@ from rasterio.errors import NotGeoreferencedWarning
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+from plotly.subplots import make_subplots # Σημαντικό για τη δημιουργία σύνθετων γραφημάτων
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-# Βιβλιοθήκη για αυθεντικοποίηση
+# Βιβλιοθήκη για αυθεντικοποίηση χρήστη
 import streamlit_authenticator as stauth
 
 # --- ΕΙΣΑΓΩΓΕΣ ΒΙΒΛΙΟΘΗΚΩΝ ΓΙΑ AI ---
+# Βεβαιωθείτε ότι αυτές οι βιβλιοθήκες είναι εγκατεστημένες στο περιβάλλον σας
+# (pip install scikit-learn prophet ruptures)
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from prophet import Prophet
 import ruptures as rpt
 # ------------------------------------------------------------------------------------
 
-# Καταστολή συγκεκριμένων προειδοποιήσεων από το rasterio
+# Καταστολή συγκεκριμένων προειδοποιήσεων από το rasterio (καλύτερα να είναι εδώ)
 warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
 
 # --- PAGE CONFIGURATION (MUST BE THE FIRST STREAMLIT COMMAND) ---
-# ... (ο υπόλοιπος κώδικάς σας συνεχίζει από εδώ) ...
-
-# --- PAGE CONFIGURATION (MUST BE THE FIRST STREAMLIT COMMAND) ---
-st.set_page_config(layout="wide", page_title="Ανάλυση Ποιότητας Επιφανειακών Υδάτων Ταμιευτήρων ΕΥΑΘ ΑΕ", page_icon="💧")
+# st.set_page_config(layout="wide", page_title="Ανάλυση Ποιότητας Επιφανειακών Υδάτων Ταμιευτήρων ΕΥΑΘ ΑΕ", page_icon="💧")
 # --------------------------------------------------------------------
+
+# ... Ο υπόλοιπος κώδικάς σας συνεχίζει από εδώ ...
+
 
 # --- AUTHENTICATION SETUP ---
 
