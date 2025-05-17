@@ -13,26 +13,39 @@ import re
 from datetime import datetime, date
 import xml.etree.ElementTree as ET
 import io
+import warnings
 
+# Βασικές βιβλιοθήκες για δεδομένα και υπολογισμούς
 import numpy as np
 import pandas as pd
+
+# Βιβλιοθήκες για γεωχωρικά δεδομένα
 import rasterio
+from rasterio.errors import NotGeoreferencedWarning
+
+# Βιβλιοθήκες για την εφαρμογή web και γραφήματα
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-import streamlit_authenticator as stauth
-from plotly.subplots import make_subplots
 
-from rasterio.errors import NotGeoreferencedWarning
-import warnings
+# Βιβλιοθήκη για αυθεντικοποίηση
+import streamlit_authenticator as stauth
+
+# --- ΕΙΣΑΓΩΓΕΣ ΒΙΒΛΙΟΘΗΚΩΝ ΓΙΑ AI ---
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+from prophet import Prophet
+import ruptures as rpt
+# ------------------------------------------------------------------------------------
+
+# Καταστολή συγκεκριμένων προειδοποιήσεων από το rasterio
 warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
 
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-
-import streamlit_authenticator as stauth # <--- Προσθήκη για αυθεντικοποίηση
+# --- PAGE CONFIGURATION (MUST BE THE FIRST STREAMLIT COMMAND) ---
+# ... (ο υπόλοιπος κώδικάς σας συνεχίζει από εδώ) ...
 
 # --- PAGE CONFIGURATION (MUST BE THE FIRST STREAMLIT COMMAND) ---
 st.set_page_config(layout="wide", page_title="Ανάλυση Ποιότητας Επιφανειακών Υδάτων Ταμιευτήρων ΕΥΑΘ ΑΕ", page_icon="💧")
