@@ -687,135 +687,50 @@ def run_lake_processing_app(waterbody: str, index_name: str):
             st.subheader("Ανάλυση Χαρτών")
             expander_col1, expander_col2 = st.columns(2)
 
-            # Αυτές οι γραμμές υποθέτουμε ότι είναι ήδη σωστά στοιχισμένες μέσα στο
-        # with st.spinner("Επεξεργασία φιλτραρισμένων δεδομένων και δημιουργία γραφημάτων..."):
+            with expander_col1:
+                with st.expander("Χάρτης: Ημέρες εντός Εύρους Τιμών", expanded=True):
+                    days_in_range_map = np.nansum(in_range_bool_mask, axis=0)
+                    fig_days = px.imshow(days_in_range_map, color_continuous_scale="plasma", labels={"color": "Ημέρες"})
+                    st.plotly_chart(fig_days, use_container_width=True, key=f"fig_days_map{key_suffix}")
+                    df_days_in_range = pd.DataFrame(days_in_range_map)
+                    add_excel_download_button(df_days_in_range, common_filename_prefix, "Days_in_Range_Map", f"excel_days_map{key_suffix}")
+                    st.caption("Δείχνει πόσες ημέρες κάθε pixel ήταν εντός του επιλεγμένου εύρους τιμών.")
 
-        with expander_col1:
-            with st.expander("Χάρτης: Ημέρες εντός Εύρους Τιμών", expanded=True):
-                days_in_range_map = np.nansum(in_range_bool_mask, axis=0)
-                fig_days = px.imshow(days_in_range_map, color_continuous_scale="plasma", labels={"color": "Ημέρες"})
-                st.plotly_chart(fig_days, use_container_width=True, key=f"fig_days_map{key_suffix}")
-                df_days_in_range = pd.DataFrame(days_in_range_map)
-                add_excel_download_button(df_days_in_range, common_filename_prefix, "Days_in_Range_Map", f"excel_days_map{key_suffix}")
-                st.caption("Δείχνει πόσες ημέρες κάθε pixel ήταν εντός του επιλεγμένου εύρους τιμών.")
+            tick_vals_days = [1,32,60,91,121,152,182,213,244,274,305,335,365]
+            tick_text_days = ["Ιαν","Φεβ","Μαρ","Απρ","Μαΐ","Ιουν","Ιουλ","Αυγ","Σεπ","Οκτ","Νοε","Δεκ",""]
 
-        # Οι tick_vals_days και tick_text_days πρέπει να είναι στο ίδιο επίπεδο με τα with expander_colX
-        # αν χρησιμοποιούνται και από το expander_col2, ή πιο μέσα αν είναι μόνο για το expander_col1
-        # Ας υποθέσουμε ότι είναι γενικά για την ενότητα χαρτών, άρα στο ίδιο επίπεδο με τα expander_colX
-        # Αν όμως το tick_vals_days και tick_text_days είναι ΕΞΩ από το `with expander_col1:`
-        # τότε το `with expander_col2:` πρέπει να είναι στο ίδιο επίπεδο με το `with expander_col1:`
+            with expander_col2:
+                with st.expander("Χάρτης: Μέση Ημέρα Εμφάνισης εντός Εύρους", expanded=True):
+                    days_array_expanded = days_filt.reshape((-1, 1, 1))
+                    sum_days_in_range = np.nansum(days_array_expanded * in_range_bool_mask, axis=0)
+                    count_pixels_in_range = np.nansum(in_range_bool_mask, axis=0)
+                    mean_day_map = np.divide(sum_days_in_range, count_pixels_in_range, 
+                                            out=np.full(sum_days_in_range.shape, np.nan), 
+                                            where=(count_pixels_in_range != 0))
+                    fig_mean_day = px.imshow(mean_day_map, color_continuous_scale="RdBu", 
+                                            labels={"color": "Μέση Ημέρα (1-365)"},
+                                            color_continuous_midpoint=182)
+                    fig_mean_day.update_layout(coloraxis_colorbar=dict(tickmode='array', tickvals=tick_vals_days, ticktext=tick_text_days))
+                    st.plotly_chart(fig_mean_day, use_container_width=True, key=f"fig_mean_day_map{key_suffix}")
+                    df_mean_day_map = pd.DataFrame(mean_day_map)
+                    add_excel_download_button(df_mean_day_map, common_filename_prefix, "Mean_Day_Map", f"excel_mean_day_map{key_suffix}")
+                    st.caption("Δείχνει τη μέση ημέρα του έτους που ένα pixel ήταν εντός του εύρους τιμών.")
 
-        # ΔΙΟΡΘΩΣΗ: Οι tick_vals_days και tick_text_days πρέπει να είναι έξω από το with expander_col1
-        # και στο ίδιο επίπεδο με αυτό, αν χρησιμοποιούνται και από το expander_col2.
-        # Αν δεν χρησιμοποιούνται από το expander_col2, μπορούν να μείνουν μέσα ή να μετακινηθούν.
-        # Για ασφάλεια, ας τα βγάλουμε ένα επίπεδο έξω από το expander_col1 αλλά μέσα στο spinner.
+            st.subheader("Ανάλυση Δείγματος Εικόνας")
+            expander_col3, expander_col4 = st.columns(2)
 
-    # Ας υποθέσουμε ότι οι tick_vals_days και tick_text_days ορίζονται εδώ,
-    # στο ίδιο επίπεδο με τα st.subheader και st.columns
-    tick_vals_days = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 365]
-    tick_text_days = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μαΐ", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ", ""]
+            with expander_col3:
+                with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
+                    average_sample_img_display = None
+                    if display_option_val.lower() == "thresholded":
+                        filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
+                        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0)
+                    else: # Original
+                        average_sample_img_display = np.nanmean(stack_filt, axis=0)
 
-    with expander_col2:
-        with st.expander("Χάρτης: Μέση Ημέρα Εμφάνισης εντός Εύρους", expanded=True):
-            days_array_expanded = days_filt.reshape((-1, 1, 1))
-            sum_days_in_range = np.nansum(days_array_expanded * in_range_bool_mask, axis=0)
-            count_pixels_in_range = np.nansum(in_range_bool_mask, axis=0)
-            mean_day_map = np.divide(sum_days_in_range, count_pixels_in_range,
-                                     out=np.full(sum_days_in_range.shape, np.nan),
-                                     where=(count_pixels_in_range != 0))
-            fig_mean_day = px.imshow(mean_day_map, color_continuous_scale="RdBu",
-                                     labels={"color": "Μέση Ημέρα (1-365)"},
-                                     color_continuous_midpoint=182)
-            fig_mean_day.update_layout(coloraxis_colorbar=dict(tickmode='array', tickvals=tick_vals_days, ticktext=tick_text_days))
-            st.plotly_chart(fig_mean_day, use_container_width=True, key=f"fig_mean_day_map{key_suffix}")
-            df_mean_day_map = pd.DataFrame(mean_day_map)
-            add_excel_download_button(df_mean_day_map, common_filename_prefix, "Mean_Day_Map", f"excel_mean_day_map{key_suffix}")
-            st.caption("Δείχνει τη μέση ημέρα του έτους που ένα pixel ήταν εντός του εύρους τιμών.")
-
-    st.subheader("Ανάλυση Δείγματος Εικόνας") # Στο ίδιο επίπεδο με το προηγούμενο st.subheader
-    expander_col3, expander_col4 = st.columns(2) # Στο ίδιο επίπεδο
-
-    # Εδώ είναι το διορθωμένο expander_col3
-    with expander_col3: # Πρέπει να είναι στο ίδιο επίπεδο με το 'with expander_col1:'
-        with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
-            average_sample_img_display = None  # Αρχικοποίηση
-
-            # Αυτό είναι μέσα στο: with expander_col3:
-            #                     with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
-            average_sample_img_display = None  # Αρχικοποίηση στην αρχή του expander
-
-            if display_option_val.lower() == "thresholded":
-                if 'stack_filt' in locals() and stack_filt is not None:
-                    filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
-                    
-                    # Έλεγχος αν υπάρχουν καθόλου δεδομένα και αν υπάρχει τουλάχιστον μία μη-NaN τιμή
-                    if filtered_stack_for_avg.shape[0] > 0 and np.any(~np.isnan(filtered_stack_for_avg)):
-                        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0) # Αυτή είναι η γραμμή 747 (ή κοντά)
-                    else:
-                        # Δεν υπάρχουν δεδομένα ή είναι όλα NaN
-                        if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-                        # (Το st.caption μπορεί να μπει εδώ ή μετά την εμφάνιση)
-                else: # stack_filt δεν υπάρχει ή είναι None
-                    if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                        average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-
-            else:  # Original
-                if 'stack_filt' in locals() and stack_filt is not None:
-                    # Έλεγχος αν υπάρχουν καθόλου δεδομένα και αν υπάρχει τουλάχιστον μία μη-NaN τιμή
-                    if stack_filt.shape[0] > 0 and np.any(~np.isnan(stack_filt)):
-                        average_sample_img_display = np.nanmean(stack_filt, axis=0) # Αυτή είναι η γραμμή 747 (ή κοντά)
-                    else:
-                        # Δεν υπάρχουν δεδομένα ή είναι όλα NaN
-                        if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-                else: # stack_filt δεν υπάρχει ή είναι None
-                    if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                        average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-
-            # Ο υπόλοιπος κώδικας για την εμφάνιση (if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)): ...)
-            # παραμένει όπως τον είχατε ή όπως τον διορθώσαμε προηγουμένως.
-            # Έλεγχος και εμφάνιση του αποτελέσματος
-            if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
-                if average_sample_img_display.size > 0:
-                    try:
+                    if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
                         avg_min_disp = float(np.nanmin(average_sample_img_display))
                         avg_max_disp = float(np.nanmax(average_sample_img_display))
-
-                        if np.isnan(avg_min_disp) or np.isnan(avg_max_disp):
-                            st.caption("Δεν υπάρχουν έγκυρες τιμές για την οπτικοποίηση του 'Μέσου Δείγματος Εικόνας'.")
-                        else:
-                            fig_sample_disp = px.imshow(average_sample_img_display, color_continuous_scale="jet",
-                                                        range_color=[avg_min_disp, avg_max_disp] if avg_min_disp < avg_max_disp else None,
-                                                        labels={"color": "Τιμή Pixel"})
-                            st.plotly_chart(fig_sample_disp, use_container_width=True, key=f"fig_sample_map{key_suffix}")
-                            df_avg_sample_display = pd.DataFrame(average_sample_img_display)
-                            add_excel_download_button(df_avg_sample_display, common_filename_prefix, "Average_Sample_Map", f"excel_avg_sample_map{key_suffix}")
-                            st.caption(f"Μέση τιμή pixel (εμφάνιση: {display_option_val}).")
-                    except Exception as e:
-                        st.caption(f"Σφάλμα κατά την προετοιμασία του γραφήματος 'Μέσου Δείγματος Εικόνας': {e}")
-                else:
-                    st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας' (κενό μέγεθος πίνακα).")
-            else:
-                st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")
-
-    # Ο κώδικας για το expander_col4 θα ακολουθήσει εδώ, στο ίδιο επίπεδο με το 'with expander_col3:'
-    # with expander_col4:
-    #     ...
-
-        # Έλεγχος και εμφάνιση του αποτελέσματος
-        if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
-            # Έλεγχος αν το array έχει μη-NaN τιμές και δεν είναι απλά ένα άδειο array από το np.array([[]])
-            if average_sample_img_display.size > 0 : # Εξασφαλίζει ότι δεν είναι shape (0,) ή παρόμοιο
-                try:
-                    avg_min_disp = float(np.nanmin(average_sample_img_display))
-                    avg_max_disp = float(np.nanmax(average_sample_img_display))
-
-                    # Επιπλέον έλεγχος για την περίπτωση που avg_min_disp == avg_max_disp (π.χ. σταθερή εικόνα)
-                    # ή αν κάποιο από αυτά είναι NaN (αν και το np.all(np.isnan) θα έπρεπε να το έχει πιάσει)
-                    if np.isnan(avg_min_disp) or np.isnan(avg_max_disp):
-                         st.caption("Δεν υπάρχουν έγκυρες τιμές για την οπτικοποίηση του 'Μέσου Δείγματος Εικόνας'.")
-                    else:
                         fig_sample_disp = px.imshow(average_sample_img_display, color_continuous_scale="jet",
                                                     range_color=[avg_min_disp, avg_max_disp] if avg_min_disp < avg_max_disp else None,
                                                     labels={"color": "Τιμή Pixel"})
@@ -823,12 +738,9 @@ def run_lake_processing_app(waterbody: str, index_name: str):
                         df_avg_sample_display = pd.DataFrame(average_sample_img_display)
                         add_excel_download_button(df_avg_sample_display, common_filename_prefix, "Average_Sample_Map", f"excel_avg_sample_map{key_suffix}")
                         st.caption(f"Μέση τιμή pixel (εμφάνιση: {display_option_val}).")
-                except Exception as e: # Πιάνει πιθανά σφάλματα από nanmin/nanmax αν το array είναι προβληματικό
-                    st.caption(f"Σφάλμα κατά την προετοιμασία του γραφήματος 'Μέσου Δείγματος Εικόνας': {e}")
-            else: # average_sample_img_display.size == 0
-                 st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας' (κενό μέγεθος πίνακα).")
-        else: # average_sample_img_display is None or all NaN
-            st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")            
+                    else:
+                        st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")
+            
             with expander_col4:
                 with st.expander("Χάρτης: Χρόνος Μέγιστης Εμφάνισης εντός Εύρους", expanded=True):
                     stack_for_time_max = np.where(in_range_bool_mask, stack_filt, np.nan) 
