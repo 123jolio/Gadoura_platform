@@ -107,7 +107,7 @@ except Exception as e:
 # st.write(f"Authenticator object after initialization: {authenticator}")
 # if authenticator:
 #     if hasattr(authenticator, 'credentials'): # The 'credentials' attribute of the authenticator object
-#                                              # will now store the *hashed* passwords.
+#                                               # will now store the *hashed* passwords.
 #         st.write(f"Authenticator.credentials (internal - should have hashed passwords now): {authenticator.credentials}")
 #     else:
 #         st.write("Authenticator object does NOT have a 'credentials' attribute after init.")
@@ -606,8 +606,8 @@ def run_lake_processing_app(waterbody: str, index_name: str):
             
             waterbody_actual_folder = WATERBODY_FOLDERS.get(waterbody, 'ΜΗ_ΚΑΘΟΡΙΣΜΕΝΟ_ΦΑΚΕΛΟ')
             st.error(f"Ο φάκελος δεδομένων για '{waterbody} - {index_name}' δεν βρέθηκε. "
-                        f"Ελέγξτε ότι ο φάκελος '{expected_folder_name}' "
-                        f"υπάρχει μέσα στον κατάλογο '{os.path.join(APP_BASE_DIR, waterbody_actual_folder)}'.")
+                            f"Ελέγξτε ότι ο φάκελος '{expected_folder_name}' "
+                            f"υπάρχει μέσα στον κατάλογο '{os.path.join(APP_BASE_DIR, waterbody_actual_folder)}'.")
             st.markdown('</div>', unsafe_allow_html=True); return
 
         input_folder_geotiffs = os.path.join(data_folder, "GeoTIFFs")
@@ -687,9 +687,6 @@ def run_lake_processing_app(waterbody: str, index_name: str):
             st.subheader("Ανάλυση Χαρτών")
             expander_col1, expander_col2 = st.columns(2)
 
-            # Αυτές οι γραμμές υποθέτουμε ότι είναι ήδη σωστά στοιχισμένες μέσα στο
-        # with st.spinner("Επεξεργασία φιλτραρισμένων δεδομένων και δημιουργία γραφημάτων..."):
-
         with expander_col1:
             with st.expander("Χάρτης: Ημέρες εντός Εύρους Τιμών", expanded=True):
                 days_in_range_map = np.nansum(in_range_bool_mask, axis=0)
@@ -699,209 +696,152 @@ def run_lake_processing_app(waterbody: str, index_name: str):
                 add_excel_download_button(df_days_in_range, common_filename_prefix, "Days_in_Range_Map", f"excel_days_map{key_suffix}")
                 st.caption("Δείχνει πόσες ημέρες κάθε pixel ήταν εντός του επιλεγμένου εύρους τιμών.")
 
-        # Οι tick_vals_days και tick_text_days πρέπει να είναι στο ίδιο επίπεδο με τα with expander_colX
-        # αν χρησιμοποιούνται και από το expander_col2, ή πιο μέσα αν είναι μόνο για το expander_col1
-        # Ας υποθέσουμε ότι είναι γενικά για την ενότητα χαρτών, άρα στο ίδιο επίπεδο με τα expander_colX
-        # Αν όμως το tick_vals_days και tick_text_days είναι ΕΞΩ από το `with expander_col1:`
-        # τότε το `with expander_col2:` πρέπει να είναι στο ίδιο επίπεδο με το `with expander_col1:`
+        tick_vals_days = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 365]
+        tick_text_days = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μαΐ", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ", ""]
 
-        # ΔΙΟΡΘΩΣΗ: Οι tick_vals_days και tick_text_days πρέπει να είναι έξω από το with expander_col1
-        # και στο ίδιο επίπεδο με αυτό, αν χρησιμοποιούνται και από το expander_col2.
-        # Αν δεν χρησιμοποιούνται από το expander_col2, μπορούν να μείνουν μέσα ή να μετακινηθούν.
-        # Για ασφάλεια, ας τα βγάλουμε ένα επίπεδο έξω από το expander_col1 αλλά μέσα στο spinner.
+        with expander_col2:
+            with st.expander("Χάρτης: Μέση Ημέρα Εμφάνισης εντός Εύρους", expanded=True):
+                days_array_expanded = days_filt.reshape((-1, 1, 1))
+                sum_days_in_range = np.nansum(days_array_expanded * in_range_bool_mask, axis=0)
+                count_pixels_in_range = np.nansum(in_range_bool_mask, axis=0)
+                mean_day_map = np.divide(sum_days_in_range, count_pixels_in_range,
+                                        out=np.full(sum_days_in_range.shape, np.nan),
+                                        where=(count_pixels_in_range != 0))
+                fig_mean_day = px.imshow(mean_day_map, color_continuous_scale="RdBu",
+                                        labels={"color": "Μέση Ημέρα (1-365)"},
+                                        color_continuous_midpoint=182)
+                fig_mean_day.update_layout(coloraxis_colorbar=dict(tickmode='array', tickvals=tick_vals_days, ticktext=tick_text_days))
+                st.plotly_chart(fig_mean_day, use_container_width=True, key=f"fig_mean_day_map{key_suffix}")
+                df_mean_day_map = pd.DataFrame(mean_day_map)
+                add_excel_download_button(df_mean_day_map, common_filename_prefix, "Mean_Day_Map", f"excel_mean_day_map{key_suffix}")
+                st.caption("Δείχνει τη μέση ημέρα του έτους που ένα pixel ήταν εντός του εύρους τιμών.")
 
-    # Ας υποθέσουμε ότι οι tick_vals_days και tick_text_days ορίζονται εδώ,
-    # στο ίδιο επίπεδο με τα st.subheader και st.columns
-    tick_vals_days = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 365]
-    tick_text_days = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μαΐ", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ", ""]
+        st.subheader("Ανάλυση Δείγματος Εικόνας")
+        expander_col3, expander_col4 = st.columns(2)
 
-    with expander_col2:
-        with st.expander("Χάρτης: Μέση Ημέρα Εμφάνισης εντός Εύρους", expanded=True):
-            days_array_expanded = days_filt.reshape((-1, 1, 1))
-            sum_days_in_range = np.nansum(days_array_expanded * in_range_bool_mask, axis=0)
-            count_pixels_in_range = np.nansum(in_range_bool_mask, axis=0)
-            mean_day_map = np.divide(sum_days_in_range, count_pixels_in_range,
-                                     out=np.full(sum_days_in_range.shape, np.nan),
-                                     where=(count_pixels_in_range != 0))
-            fig_mean_day = px.imshow(mean_day_map, color_continuous_scale="RdBu",
-                                     labels={"color": "Μέση Ημέρα (1-365)"},
-                                     color_continuous_midpoint=182)
-            fig_mean_day.update_layout(coloraxis_colorbar=dict(tickmode='array', tickvals=tick_vals_days, ticktext=tick_text_days))
-            st.plotly_chart(fig_mean_day, use_container_width=True, key=f"fig_mean_day_map{key_suffix}")
-            df_mean_day_map = pd.DataFrame(mean_day_map)
-            add_excel_download_button(df_mean_day_map, common_filename_prefix, "Mean_Day_Map", f"excel_mean_day_map{key_suffix}")
-            st.caption("Δείχνει τη μέση ημέρα του έτους που ένα pixel ήταν εντός του εύρους τιμών.")
+        with expander_col3:
+            with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
+                average_sample_img_display = None 
 
-    st.subheader("Ανάλυση Δείγματος Εικόνας") # Στο ίδιο επίπεδο με το προηγούμενο st.subheader
-    expander_col3, expander_col4 = st.columns(2) # Στο ίδιο επίπεδο
-
-    # Εδώ είναι το διορθωμένο expander_col3
-    with expander_col3: # Πρέπει να είναι στο ίδιο επίπεδο με το 'with expander_col1:'
-        with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
-            average_sample_img_display = None  # Αρχικοποίηση
-
-            # Αυτό είναι μέσα στο: with expander_col3:
-            #                     with st.expander("Χάρτης: Μέσο Δείγμα Εικόνας", expanded=True):
-            average_sample_img_display = None  # Αρχικοποίηση στην αρχή του expander
-
-            if display_option_val.lower() == "thresholded":
-                if 'stack_filt' in locals() and stack_filt is not None:
-                    filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
-                    
-                    # Έλεγχος αν υπάρχουν καθόλου δεδομένα και αν υπάρχει τουλάχιστον μία μη-NaN τιμή
-                    if filtered_stack_for_avg.shape[0] > 0 and np.any(~np.isnan(filtered_stack_for_avg)):
-                        average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0) # Αυτή είναι η γραμμή 747 (ή κοντά)
-                    else:
-                        # Δεν υπάρχουν δεδομένα ή είναι όλα NaN
-                        if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-                        # (Το st.caption μπορεί να μπει εδώ ή μετά την εμφάνιση)
-                else: # stack_filt δεν υπάρχει ή είναι None
-                    if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                        average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-
-            else:  # Original
-                if 'stack_filt' in locals() and stack_filt is not None:
-                    # Έλεγχος αν υπάρχουν καθόλου δεδομένα και αν υπάρχει τουλάχιστον μία μη-NaN τιμή
-                    if stack_filt.shape[0] > 0 and np.any(~np.isnan(stack_filt)):
-                        average_sample_img_display = np.nanmean(stack_filt, axis=0) # Αυτή είναι η γραμμή 747 (ή κοντά)
-                    else:
-                        # Δεν υπάρχουν δεδομένα ή είναι όλα NaN
-                        if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-                else: # stack_filt δεν υπάρχει ή είναι None
-                    if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
-                        average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
-
-            # Ο υπόλοιπος κώδικας για την εμφάνιση (if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)): ...)
-            # παραμένει όπως τον είχατε ή όπως τον διορθώσαμε προηγουμένως.
-            # Έλεγχος και εμφάνιση του αποτελέσματος
-            if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
-                if average_sample_img_display.size > 0:
-                    try:
-                        avg_min_disp = float(np.nanmin(average_sample_img_display))
-                        avg_max_disp = float(np.nanmax(average_sample_img_display))
-
-                        if np.isnan(avg_min_disp) or np.isnan(avg_max_disp):
-                            st.caption("Δεν υπάρχουν έγκυρες τιμές για την οπτικοποίηση του 'Μέσου Δείγματος Εικόνας'.")
+                if display_option_val.lower() == "thresholded":
+                    if 'stack_filt' in locals() and stack_filt is not None:
+                        filtered_stack_for_avg = np.where(in_range_bool_mask, stack_filt, np.nan)
+                        
+                        if filtered_stack_for_avg.shape[0] > 0 and np.any(~np.isnan(filtered_stack_for_avg)):
+                            average_sample_img_display = np.nanmean(filtered_stack_for_avg, axis=0)
                         else:
-                            fig_sample_disp = px.imshow(average_sample_img_display, color_continuous_scale="jet",
-                                                        range_color=[avg_min_disp, avg_max_disp] if avg_min_disp < avg_max_disp else None,
-                                                        labels={"color": "Τιμή Pixel"})
-                            st.plotly_chart(fig_sample_disp, use_container_width=True, key=f"fig_sample_map{key_suffix}")
-                            df_avg_sample_display = pd.DataFrame(average_sample_img_display)
-                            add_excel_download_button(df_avg_sample_display, common_filename_prefix, "Average_Sample_Map", f"excel_avg_sample_map{key_suffix}")
-                            st.caption(f"Μέση τιμή pixel (εμφάνιση: {display_option_val}).")
-                    except Exception as e:
-                        st.caption(f"Σφάλμα κατά την προετοιμασία του γραφήματος 'Μέσου Δείγματος Εικόνας': {e}")
-                else:
-                    st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας' (κενό μέγεθος πίνακα).")
-            else:
-                st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")
+                            if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                                average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+                    else: 
+                        if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+                else:  # Original
+                    if 'stack_filt' in locals() and stack_filt is not None:
+                        if stack_filt.shape[0] > 0 and np.any(~np.isnan(stack_filt)):
+                            average_sample_img_display = np.nanmean(stack_filt, axis=0)
+                        else:
+                            if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                                average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
+                    else: 
+                        if 'STACK' in locals() and STACK is not None and STACK.ndim == 3:
+                            average_sample_img_display = np.full(STACK.shape[1:], np.nan, dtype=float)
 
-    # Ο κώδικας για το expander_col4 θα ακολουθήσει εδώ, στο ίδιο επίπεδο με το 'with expander_col3:'
-    # with expander_col4:
-    #     ...
+                if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
+                    if average_sample_img_display.size > 0:
+                        try:
+                            avg_min_disp = float(np.nanmin(average_sample_img_display))
+                            avg_max_disp = float(np.nanmax(average_sample_img_display))
 
-        # Έλεγχος και εμφάνιση του αποτελέσματος
-        if average_sample_img_display is not None and not np.all(np.isnan(average_sample_img_display)):
-            # Έλεγχος αν το array έχει μη-NaN τιμές και δεν είναι απλά ένα άδειο array από το np.array([[]])
-            if average_sample_img_display.size > 0 : # Εξασφαλίζει ότι δεν είναι shape (0,) ή παρόμοιο
-                try:
-                    avg_min_disp = float(np.nanmin(average_sample_img_display))
-                    avg_max_disp = float(np.nanmax(average_sample_img_display))
-
-                    # Επιπλέον έλεγχος για την περίπτωση που avg_min_disp == avg_max_disp (π.χ. σταθερή εικόνα)
-                    # ή αν κάποιο από αυτά είναι NaN (αν και το np.all(np.isnan) θα έπρεπε να το έχει πιάσει)
-                    if np.isnan(avg_min_disp) or np.isnan(avg_max_disp):
-                         st.caption("Δεν υπάρχουν έγκυρες τιμές για την οπτικοποίηση του 'Μέσου Δείγματος Εικόνας'.")
+                            if np.isnan(avg_min_disp) or np.isnan(avg_max_disp):
+                                st.caption("Δεν υπάρχουν έγκυρες τιμές για την οπτικοποίηση του 'Μέσου Δείγματος Εικόνας'.")
+                            else:
+                                fig_sample_disp = px.imshow(average_sample_img_display, color_continuous_scale="jet",
+                                                            range_color=[avg_min_disp, avg_max_disp] if avg_min_disp < avg_max_disp else None,
+                                                            labels={"color": "Τιμή Pixel"})
+                                st.plotly_chart(fig_sample_disp, use_container_width=True, key=f"fig_sample_map{key_suffix}")
+                                df_avg_sample_display = pd.DataFrame(average_sample_img_display)
+                                add_excel_download_button(df_avg_sample_display, common_filename_prefix, "Average_Sample_Map", f"excel_avg_sample_map{key_suffix}")
+                                st.caption(f"Μέση τιμή pixel (εμφάνιση: {display_option_val}).")
+                        except Exception as e:
+                            st.caption(f"Σφάλμα κατά την προετοιμασία του γραφήματος 'Μέσου Δείγματος Εικόνας': {e}")
                     else:
-                        fig_sample_disp = px.imshow(average_sample_img_display, color_continuous_scale="jet",
-                                                    range_color=[avg_min_disp, avg_max_disp] if avg_min_disp < avg_max_disp else None,
-                                                    labels={"color": "Τιμή Pixel"})
-                        st.plotly_chart(fig_sample_disp, use_container_width=True, key=f"fig_sample_map{key_suffix}")
-                        df_avg_sample_display = pd.DataFrame(average_sample_img_display)
-                        add_excel_download_button(df_avg_sample_display, common_filename_prefix, "Average_Sample_Map", f"excel_avg_sample_map{key_suffix}")
-                        st.caption(f"Μέση τιμή pixel (εμφάνιση: {display_option_val}).")
-                except Exception as e: # Πιάνει πιθανά σφάλματα από nanmin/nanmax αν το array είναι προβληματικό
-                    st.caption(f"Σφάλμα κατά την προετοιμασία του γραφήματος 'Μέσου Δείγματος Εικόνας': {e}")
-            else: # average_sample_img_display.size == 0
-                 st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας' (κενό μέγεθος πίνακα).")
-        else: # average_sample_img_display is None or all NaN
-            st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")            
-            with expander_col4:
-                with st.expander("Χάρτης: Χρόνος Μέγιστης Εμφάνισης εντός Εύρους", expanded=True):
-                    stack_for_time_max = np.where(in_range_bool_mask, stack_filt, np.nan) 
-                    time_max_map = np.full(stack_for_time_max.shape[1:], np.nan, dtype=float)
-                    valid_pixels_mask = ~np.all(np.isnan(stack_for_time_max), axis=0)
-                    
-                    if np.any(valid_pixels_mask) and filtered_dates_objects: 
-                        max_indices_flat = np.nanargmax(stack_for_time_max[:, valid_pixels_mask], axis=0)
-                        days_for_time_max = np.array([d.timetuple().tm_yday for d in filtered_dates_objects])
-                        if len(days_for_time_max) > 0: 
-                            valid_max_indices = np.clip(max_indices_flat, 0, len(days_for_time_max) - 1)
-                            time_max_map[valid_pixels_mask] = days_for_time_max[valid_max_indices]
-
-                    fig_time_max = px.imshow(time_max_map, color_continuous_scale="RdBu", 
-                                            labels={"color": "Ημέρα Μέγιστης (1-365)"},
-                                            color_continuous_midpoint=182,
-                                            range_color=[1,365])
-                    fig_time_max.update_layout(coloraxis_colorbar=dict(tickmode='array', tickvals=tick_vals_days, ticktext=tick_text_days))
-                    st.plotly_chart(fig_time_max, use_container_width=True, key=f"fig_time_max_map{key_suffix}")
-                    df_time_max_map = pd.DataFrame(time_max_map)
-                    add_excel_download_button(df_time_max_map, common_filename_prefix, "Time_Max_Value_Map", f"excel_time_max_map{key_suffix}")
-                    st.caption("Δείχνει την ημέρα του έτους που κάθε pixel είχε τη μέγιστη τιμή (εντός του εύρους).")
-
-            st.subheader("Πρόσθετη Ανάλυση Κατανομής Ημερών εντός Εύρους")
-            stack_full_in_range = (STACK >= lower_t) & (STACK <= upper_t)
-            num_cols_display = 3
-            
-            with st.expander("Μηνιαία Κατανομή Ημερών εντός Εύρους", expanded=False):
-                st.caption("Εμφανίζονται μόνο οι μήνες που έχουν επιλεγεί παραπάνω.")
-                months_to_show = [m for m in range(1, 13) if m in selected_months_val]
-                if not months_to_show:
-                    st.info("Δεν έχουν επιλεγεί μήνες για την μηνιαία ανάλυση.")
+                        st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας' (κενό μέγεθος πίνακα).")
                 else:
-                    cols_monthly = st.columns(num_cols_display)
-                    col_idx_monthly = 0
-                    for month_num in months_to_show:
-                        indices_for_month_all_years = [
-                            i for i, dt_obj in enumerate(DATES)
-                            if dt_obj.month == month_num and (not selected_years_val or dt_obj.year in selected_years_val)
-                        ]
-                        if indices_for_month_all_years:
-                            monthly_sum_in_range = np.sum(stack_full_in_range[indices_for_month_all_years, :, :], axis=0)
-                            month_name_disp = month_options_map[month_num]
-                            fig_month_disp = px.imshow(monthly_sum_in_range, color_continuous_scale="plasma", title=month_name_disp, labels={"color": "Ημέρες"})
-                            fig_month_disp.update_layout(margin=dict(l=0,r=0,t=30,b=0), height=350)
-                            fig_month_disp.update_coloraxes(showscale=False)
-                            cols_monthly[col_idx_monthly].plotly_chart(fig_month_disp, use_container_width=True, key=f"fig_month_{month_num}{key_suffix}")
-                            df_monthly_sum = pd.DataFrame(monthly_sum_in_range)
-                            add_excel_download_button(df_monthly_sum, common_filename_prefix, f"Monthly_Dist_{month_name_disp}", f"excel_month_{month_num}{key_suffix}")
-                            col_idx_monthly = (col_idx_monthly + 1) % num_cols_display
-            
-            with st.expander("Ετήσια Κατανομή Ημερών εντός Εύρους", expanded=False):
-                st.caption("Εμφανίζονται μόνο τα έτη που έχουν επιλεγεί παραπάνω.")
-                years_to_show = [y for y in unique_years_avail if y in selected_years_val]
-                if not years_to_show:
-                    st.info("Δεν έχουν επιλεγεί έτη για την ετήσια ανάλυση.")
-                else:
-                    cols_yearly = st.columns(num_cols_display)
-                    col_idx_yearly = 0
-                    for year_val in years_to_show:
-                        indices_for_year_selected_months = [
-                            i for i, dt_obj in enumerate(DATES)
-                            if dt_obj.year == year_val and (not selected_months_val or dt_obj.month in selected_months_val)
-                        ]
-                        if indices_for_year_selected_months:
-                            yearly_sum_in_range = np.sum(stack_full_in_range[indices_for_year_selected_months, :, :], axis=0)
-                            fig_year_disp = px.imshow(yearly_sum_in_range, color_continuous_scale="plasma", title=f"Έτος: {year_val}", labels={"color": "Ημέρες"})
-                            fig_year_disp.update_layout(margin=dict(l=0,r=0,t=30,b=0), height=350)
-                            fig_year_disp.update_coloraxes(showscale=False)
-                            cols_yearly[col_idx_yearly].plotly_chart(fig_year_disp, use_container_width=True, key=f"fig_year_{year_val}{key_suffix}")
-                            df_yearly_sum = pd.DataFrame(yearly_sum_in_range)
-                            add_excel_download_button(df_yearly_sum, common_filename_prefix, f"Yearly_Dist_Year_{year_val}", f"excel_year_{year_val}{key_suffix}")
-                            col_idx_yearly = (col_idx_yearly + 1) % num_cols_display
+                    st.caption("Δεν υπάρχουν δεδομένα για το 'Μέσο Δείγμα Εικόνας'.")
+        
+        with expander_col4:
+            with st.expander("Χάρτης: Χρόνος Μέγιστης Εμφάνισης εντός Εύρους", expanded=True):
+                stack_for_time_max = np.where(in_range_bool_mask, stack_filt, np.nan) 
+                time_max_map = np.full(stack_for_time_max.shape[1:], np.nan, dtype=float)
+                valid_pixels_mask = ~np.all(np.isnan(stack_for_time_max), axis=0)
+                
+                if np.any(valid_pixels_mask) and filtered_dates_objects: 
+                    max_indices_flat = np.nanargmax(stack_for_time_max[:, valid_pixels_mask], axis=0)
+                    days_for_time_max = np.array([d.timetuple().tm_yday for d in filtered_dates_objects])
+                    if len(days_for_time_max) > 0: 
+                        valid_max_indices = np.clip(max_indices_flat, 0, len(days_for_time_max) - 1)
+                        time_max_map[valid_pixels_mask] = days_for_time_max[valid_max_indices]
+
+                fig_time_max = px.imshow(time_max_map, color_continuous_scale="RdBu", 
+                                        labels={"color": "Ημέρα Μέγιστης (1-365)"},
+                                        color_continuous_midpoint=182,
+                                        range_color=[1,365])
+                fig_time_max.update_layout(coloraxis_colorbar=dict(tickmode='array', tickvals=tick_vals_days, ticktext=tick_text_days))
+                st.plotly_chart(fig_time_max, use_container_width=True, key=f"fig_time_max_map{key_suffix}")
+                df_time_max_map = pd.DataFrame(time_max_map)
+                add_excel_download_button(df_time_max_map, common_filename_prefix, "Time_Max_Value_Map", f"excel_time_max_map{key_suffix}")
+                st.caption("Δείχνει την ημέρα του έτους που κάθε pixel είχε τη μέγιστη τιμή (εντός του εύρους).")
+
+        st.subheader("Πρόσθετη Ανάλυση Κατανομής Ημερών εντός Εύρους")
+        stack_full_in_range = (STACK >= lower_t) & (STACK <= upper_t)
+        num_cols_display = 3
+        
+        with st.expander("Μηνιαία Κατανομή Ημερών εντός Εύρους", expanded=False):
+            st.caption("Εμφανίζονται μόνο οι μήνες που έχουν επιλεγεί παραπάνω.")
+            months_to_show = [m for m in range(1, 13) if m in selected_months_val]
+            if not months_to_show:
+                st.info("Δεν έχουν επιλεγεί μήνες για την μηνιαία ανάλυση.")
+            else:
+                cols_monthly = st.columns(num_cols_display)
+                col_idx_monthly = 0
+                for month_num in months_to_show:
+                    indices_for_month_all_years = [
+                        i for i, dt_obj in enumerate(DATES)
+                        if dt_obj.month == month_num and (not selected_years_val or dt_obj.year in selected_years_val)
+                    ]
+                    if indices_for_month_all_years:
+                        monthly_sum_in_range = np.sum(stack_full_in_range[indices_for_month_all_years, :, :], axis=0)
+                        month_name_disp = month_options_map[month_num]
+                        fig_month_disp = px.imshow(monthly_sum_in_range, color_continuous_scale="plasma", title=month_name_disp, labels={"color": "Ημέρες"})
+                        fig_month_disp.update_layout(margin=dict(l=0,r=0,t=30,b=0), height=350)
+                        fig_month_disp.update_coloraxes(showscale=False)
+                        cols_monthly[col_idx_monthly].plotly_chart(fig_month_disp, use_container_width=True, key=f"fig_month_{month_num}{key_suffix}")
+                        df_monthly_sum = pd.DataFrame(monthly_sum_in_range)
+                        add_excel_download_button(df_monthly_sum, common_filename_prefix, f"Monthly_Dist_{month_name_disp}", f"excel_month_{month_num}{key_suffix}")
+                        col_idx_monthly = (col_idx_monthly + 1) % num_cols_display
+        
+        with st.expander("Ετήσια Κατανομή Ημερών εντός Εύρους", expanded=False):
+            st.caption("Εμφανίζονται μόνο τα έτη που έχουν επιλεγεί παραπάνω.")
+            years_to_show = [y for y in unique_years_avail if y in selected_years_val]
+            if not years_to_show:
+                st.info("Δεν έχουν επιλεγεί έτη για την ετήσια ανάλυση.")
+            else:
+                cols_yearly = st.columns(num_cols_display)
+                col_idx_yearly = 0
+                for year_val in years_to_show:
+                    indices_for_year_selected_months = [
+                        i for i, dt_obj in enumerate(DATES)
+                        if dt_obj.year == year_val and (not selected_months_val or dt_obj.month in selected_months_val)
+                    ]
+                    if indices_for_year_selected_months:
+                        yearly_sum_in_range = np.sum(stack_full_in_range[indices_for_year_selected_months, :, :], axis=0)
+                        fig_year_disp = px.imshow(yearly_sum_in_range, color_continuous_scale="plasma", title=f"Έτος: {year_val}", labels={"color": "Ημέρες"})
+                        fig_year_disp.update_layout(margin=dict(l=0,r=0,t=30,b=0), height=350)
+                        fig_year_disp.update_coloraxes(showscale=False)
+                        cols_yearly[col_idx_yearly].plotly_chart(fig_year_disp, use_container_width=True, key=f"fig_year_{year_val}{key_suffix}")
+                        df_yearly_sum = pd.DataFrame(yearly_sum_in_range)
+                        add_excel_download_button(df_yearly_sum, common_filename_prefix, f"Yearly_Dist_Year_{year_val}", f"excel_year_{year_val}{key_suffix}")
+                        col_idx_yearly = (col_idx_yearly + 1) % num_cols_display
         st.markdown('</div>', unsafe_allow_html=True)
 
 def image_navigation_ui(images_folder: str, available_dates_map: dict, 
@@ -1396,7 +1336,6 @@ def run_water_quality_dashboard(waterbody: str, index_name: str):
                                     fig_det_u_disp.update_layout(title=f"mg/m³ για {sel_pt_u_disp} (KML)",xaxis_title="Ημερομηνία",yaxis_title="mg/m³")
                                     st.plotly_chart(fig_det_u_disp, use_container_width=True, key=f"detail_u_chart_disp_{tab_prefix_key_upl}")
                                     
-                                                                
                                     df_point_mg_detail_u = pd.DataFrame({'Date': list(dts_u_detail), f'mg_m3': list(vals_u_detail)}).sort_values(by="Date")
                                     add_excel_download_button(df_point_mg_detail_u, f"{common_filename_prefix_dash}_upload_point_{sel_pt_u_disp}", f"mg_m3 for {sel_pt_u_disp}", f"excel_detail_mg_upl_{sel_pt_u_disp}_{tab_prefix_key_upl}")
                                 else: st.caption(f"Δεν υπάρχουν επεξεργασμένα δεδομένα mg/m³ για το σημείο '{sel_pt_u_disp}'.")
@@ -1409,7 +1348,7 @@ def run_water_quality_dashboard(waterbody: str, index_name: str):
 
 def run_predictive_tools(waterbody: str, initial_selected_index: str):
     with st.container():
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+        st.markdown('<div class="custom-card">', unsafe_allow_html=True) # Note: .custom-card might not be defined in inject_custom_css, consider using .card
         st.header(f"Εργαλεία Πρόβλεψης & Έγκαιρης Ενημέρωσης: {waterbody}")
         st.markdown(f"Παράλληλη Ανάλυση για Δείκτες: **Πραγματικό, Χλωροφύλλη, Θολότητα**")
         
@@ -1460,7 +1399,7 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
             analysis_results_all_indices = {} 
             
             sampling_points_to_use_for_analysis = None
-            default_kml_found = False # Moved definition higher
+            default_kml_found = False 
             if sampling_type_common == "Προεπιλογή":
                 for idx_for_kml in indices_to_analyze: 
                     temp_data_folder_for_kml = get_data_folder(waterbody, idx_for_kml)
@@ -1479,8 +1418,8 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
                 if uploaded_kml_common:
                     sampling_points_to_use_for_analysis = parse_sampling_kml(uploaded_kml_common)
                     if not sampling_points_to_use_for_analysis: # Check if KML parsing failed
-                         st.error("Το ανεβασμένο KML δεν περιείχε έγκυρα σημεία ή απέτυχε η ανάλυση.")
-                         st.markdown('</div>', unsafe_allow_html=True); return
+                        st.error("Το ανεβασμένο KML δεν περιείχε έγκυρα σημεία ή απέτυχε η ανάλυση.")
+                        st.markdown('</div>', unsafe_allow_html=True); return
                 else:
                     st.error("Επιλέξατε ανέβασμα KML, αλλά δεν έχει μεταφορτωθεί αρχείο.")
                     st.markdown('</div>', unsafe_allow_html=True); return
@@ -1494,8 +1433,6 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
             with st.spinner("Εκτέλεση αναλύσεων για όλους τους δείκτες... Αυτό μπορεί να διαρκέσει λίγο."):
                 for i_prog, current_idx_name_iter in enumerate(indices_to_analyze):
                     progress_val = (i_prog + 1) / len(indices_to_analyze)
-                    # Initialize progress_bar inside the loop if you want one per index
-                    # Or update a single one:
                     if 'progress_bar_pred' not in st.session_state:
                         st.session_state.progress_bar_pred = st.progress(0, text="Έναρξη επεξεργασίας δεικτών...")
                     
@@ -1554,7 +1491,7 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
                             "fig_mg": raw_figs_and_data[3],
                             "data_results_colors": raw_figs_and_data[4],
                             "data_results_mg": raw_figs_and_data[5],    
-                            "data_df_h": raw_figs_and_data[6]           
+                            "data_df_h": raw_figs_and_data[6]        
                         }
                         st.session_state.progress_bar_pred.progress(progress_val, text=f"Ολοκληρώθηκε: {current_idx_name_iter}")
                     except Exception as e_analyze:
@@ -1704,13 +1641,13 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
                                 if fig_internal_key_iter == "geo" and idx_name_iter_cols == "Χλωροφύλλη":
                                     st.pyplot(create_chl_legend_figure(orientation="horizontal"))
                             elif fig_internal_key_iter != "lake_height_only" and fig_internal_key_iter != "colors": # colors handled in its own block
-                                 st.caption(f"Δεν υπάρχουν δεδομένα για '{chart_name_key_iter}' ({idx_name_iter_cols}).")
+                                st.caption(f"Δεν υπάρχουν δεδομένα για '{chart_name_key_iter}' ({idx_name_iter_cols}).")
                 st.markdown("""<hr style="border:1px solid #444; margin-top:1.5rem; margin-bottom:1.5rem;">""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 
 def main_app():
-    inject_custom_css() 
+    # inject_custom_css() # This is now called globally in if __name__ == "__main__"
     run_intro_page_custom() 
     run_custom_sidebar_ui_custom() 
 
@@ -1737,24 +1674,43 @@ def main_app():
     render_footer() 
 
 if __name__ == "__main__":
-    # --- RENDER LOGIN UI ---
-    # The authenticator.login() method will render the login form,
-    # process login attempts, and update st.session_state.
-    authenticator.login('main') # You can use 'sidebar' instead of 'main'
+    # --- STEP 1: INJECT CUSTOM CSS GLOBALLY ---
+    inject_custom_css()
 
-    # Check authentication status from st.session_state
-    # Use .get() for safer access to session_state keys
+    # --- STEP 2: HANDLE AUTHENTICATION AND PAGE DISPLAY ---
     auth_status = st.session_state.get("authentication_status")
 
-    if auth_status: # Checks if True
-        # If user is authenticated, run the main application
+    if auth_status is True:
         main_app()
-    elif auth_status is False: # Explicitly checks for False
-        st.error('Το όνομα χρήστη ή ο κωδικός πρόσβασης είναι λανθασμένος (Username/password is incorrect)')
-    elif auth_status is None: # Explicitly checks for None (before first login attempt)
-        st.warning('Παρακαλώ εισάγετε το όνομα χρήστη και τον κωδικό πρόσβασής σας (Please enter your username and password)')
+    else:
+        # User is NOT authenticated (status is None or False), so display login page elements
 
-    # Optional: Add a small footer that's always visible, even on login page
-    # if not st.session_state.get("authentication_status"): # Check if not logged in
-    #    current_year = datetime.now().year
-    #    st.markdown(f"<div style='text-align:center; padding:10px; position:fixed; bottom:0; width:100%; background: #161b22; color: #7a828e;'>© {current_year} EYATH SA</div>", unsafe_allow_html=True)
+        # --- Display Logo on Login Page ---
+        if os.path.exists(LOGO_PATH):
+            _col_login_logo_spacer1, col_login_logo, _col_login_logo_spacer2 = st.columns([1, 1.5, 1])
+            with col_login_logo:
+                st.image(LOGO_PATH, width=200, output_format="auto")
+        else:
+            _col_login_logo_spacer1, col_login_logo, _col_login_logo_spacer2 = st.columns([1, 1.5, 1])
+            with col_login_logo:
+                st.markdown("<div style='text-align: center; font-size: 48px;'>💧</div>", unsafe_allow_html=True, help="Λογότυπο ΕΥΑΘ")
+
+        # --- Render Login UI & Process Login ---
+        authenticator.login('main')
+
+        # --- Display Messages Based on Login Attempt ---
+        current_auth_status_after_login = st.session_state.get("authentication_status")
+
+        if current_auth_status_after_login is False:
+            st.error('Το όνομα χρήστη ή ο κωδικός πρόσβασης είναι λανθασμένος (Username/password is incorrect)')
+        elif current_auth_status_after_login is None:
+            st.warning('Παρακαλώ εισάγετε το όνομα χρήστη και τον κωδικό πρόσβασής σας (Please enter your username and password)')
+
+        # --- Footer on Login Page ---
+        if not st.session_state.get("authentication_status"):
+            current_year = datetime.now().year
+            st.markdown(f"""
+                <div style='text-align:center; color: #7a828e; font-size:0.85rem; padding-top: 3rem; padding-bottom: 1rem;'>
+                © {current_year} EYATH SA
+                </div>
+            """, unsafe_allow_html=True)
