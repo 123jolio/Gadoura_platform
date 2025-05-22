@@ -13,45 +13,27 @@ import re
 from datetime import datetime, date
 import xml.etree.ElementTree as ET
 import io
-import warnings
 
-# Βασικές βιβλιοθήκες για δεδομένα και υπολογισμούς
 import numpy as np
 import pandas as pd
-
-# Βιβλιοθήκες για γεωχωρικά δεδομένα
 import rasterio
-from rasterio.errors import NotGeoreferencedWarning
-
-# Βιβλιοθήκες για την εφαρμογή web και γραφήματα
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots # Σημαντικό για τη δημιουργία σύνθετων γραφημάτων
+from plotly.subplots import make_subplots
+
+from rasterio.errors import NotGeoreferencedWarning
+import warnings
+warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
+
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-# Βιβλιοθήκη για αυθεντικοποίηση χρήστη
-import streamlit_authenticator as stauth
-
-# --- ΕΙΣΑΓΩΓΕΣ ΒΙΒΛΙΟΘΗΚΩΝ ΓΙΑ AI ---
-# Βεβαιωθείτε ότι αυτές οι βιβλιοθήκες είναι εγκατεστημένες στο περιβάλλον σας
-# (pip install scikit-learn prophet ruptures)
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-from prophet import Prophet
-import ruptures as rpt
-# ------------------------------------------------------------------------------------
-
-# Καταστολή συγκεκριμένων προειδοποιήσεων από το rasterio (καλύτερα να είναι εδώ)
-warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
+import streamlit_authenticator as stauth # <--- Προσθήκη για αυθεντικοποίηση
 
 # --- PAGE CONFIGURATION (MUST BE THE FIRST STREAMLIT COMMAND) ---
-# st.set_page_config(layout="wide", page_title="Ανάλυση Ποιότητας Επιφανειακών Υδάτων Ταμιευτήρων ΕΥΑΘ ΑΕ", page_icon="💧")
+st.set_page_config(layout="wide", page_title="Ανάλυση Ποιότητας Επιφανειακών Υδάτων Ταμιευτήρων ΕΥΑΘ ΑΕ", page_icon="💧")
 # --------------------------------------------------------------------
-
-# ... Ο υπόλοιπος κώδικάς σας συνεχίζει από εδώ ...
-
 
 # --- AUTHENTICATION SETUP ---
 
@@ -1726,338 +1708,6 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
                 st.markdown("""<hr style="border:1px solid #444; margin-top:1.5rem; margin-bottom:1.5rem;">""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Βεβαιωθείτε ότι οι παρακάτω εισαγωγές είναι αποσχολιασμένες στην αρχή του αρχείου σας:
-# from sklearn.ensemble import IsolationForest
-# from sklearn.preprocessing import StandardScaler
-# from prophet import Prophet
-# import ruptures as rpt
-# (και φυσικά οι import os, np, pd, st, px, go, datetime, rasterio, κλπ. που ήδη υπάρχουν)
-
-def run_ai_driven_analysis(waterbody: str, index_name: str):
-    """
-    Εκτελεί προηγμένες αναλύσεις προτύπων (AI) στις χρονοσειρές
-    ποιότητας υδάτων και στάθμης.
-    """
-    # Helper for debug messages (τοπική συνάρτηση ή μπορείτε να την κάνετε global)
-    def _debug_ai(label, data):
-        # Για να μην είναι πολύ φλύαρο, μπορείτε να το ελέγχετε με το DEBUG flag
-        if DEBUG: # Υποθέτοντας ότι έχετε ορίσει το DEBUG = True/False κάπου global
-            with st.expander(f"Debug AI: {label}", expanded=False):
-                st.write(data)
-                if hasattr(data, 'shape'):
-                    st.write(f"Shape: {data.shape}")
-                if isinstance(data, pd.DataFrame) or isinstance(data, pd.Series):
-                    if not data.empty:
-                        st.write("Head:", data.head())
-                        try:
-                            st.write("Describe:", data.describe(include='all'))
-                        except: # Αν το describe αποτύχει για κάποιο λόγο
-                            pass
-                elif isinstance(data, dict):
-                     st.json(data, expanded=False)
-
-
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.header(f"Προηγμένη Ανάλυση Προτύπων (AI): {waterbody} - {index_name}")
-
-        # --- ΒΗΜΑ 1: Φόρτωση Βασικών Δεδομένων ---
-        _debug_ai("Αρχικές Παράμετροι AI", {"waterbody": waterbody, "index_name": index_name})
-        data_folder = get_data_folder(waterbody, index_name) # Υποθέτει ότι αυτή η συνάρτηση υπάρχει
-        if not data_folder:
-            st.error(f"Ο φάκελος δεδομένων για '{waterbody} - {index_name}' δεν βρέθηκε.")
-            st.markdown('</div>', unsafe_allow_html=True); return
-        _debug_ai("AI - Data Folder", data_folder)
-
-        images_folder_path = os.path.join(data_folder, "GeoTIFFs")
-        lake_height_excel_path = os.path.join(data_folder, "lake height.xlsx")
-        default_sampling_kml_path = os.path.join(data_folder, "sampling.kml")
-
-        sampling_points_list = []
-        if os.path.exists(default_sampling_kml_path):
-            sampling_points_list = parse_sampling_kml(default_sampling_kml_path) # Υποθέτει ότι αυτή η συνάρτηση υπάρχει
-        _debug_ai("AI - Sampling Points List (from KML)", sampling_points_list)
-        
-        if not sampling_points_list:
-            st.info("Δεν βρέθηκαν προεπιλεγμένα σημεία δειγματοληψίας (sampling.kml). Οι αναλύσεις AI ανά σημείο δεν θα είναι διαθέσιμες.")
-
-        first_img_data_generic, first_transform_generic = None, None
-        available_tifs_generic = {
-            str(d.date()): fn for fn in (os.listdir(images_folder_path) if os.path.exists(images_folder_path) else [])
-            if fn.lower().endswith(('.tif', '.tiff'))
-            for _, d in [extract_date_from_filename(fn)] if d # Υποθέτει ότι αυτή η συνάρτηση υπάρχει
-        }
-        _debug_ai("AI - Available TIFFs for Generic First Image", available_tifs_generic)
-
-        if available_tifs_generic:
-            first_available_date = sorted(available_tifs_generic.keys())[0]
-            try:
-                with rasterio.open(os.path.join(images_folder_path, available_tifs_generic[first_available_date])) as src:
-                    if src.count >= 3:
-                        first_img_data_generic = src.read([1, 2, 3])
-                        first_transform_generic = src.transform
-                    else:
-                         debug_message(f"AI Analysis: Η πρώτη εικόνα {available_tifs_generic[first_available_date]} έχει {src.count} κανάλια (χρειάζονται 3 για το first_img_data_generic). Το first_img_data_generic θα είναι None.")
-            except Exception as e:
-                debug_message(f"AI Analysis: Δεν ήταν δυνατή η φόρτωση της πρώτης εικόνας: {e}")
-        _debug_ai("AI - First Image Data Generic (shape)", first_img_data_generic.shape if first_img_data_generic is not None else "None")
-
-        all_point_names_from_kml = [pt[0] for pt in sampling_points_list] if sampling_points_list else []
-        
-        min_date_for_generic = date(1900, 1, 1)
-        max_date_for_generic = date.today()
-
-        # Κλήση της analyze_sampling_generic για να πάρουμε τα επεξεργασμένα δεδομένα
-        # Υποθέτει ότι η συνάρτηση analyze_sampling_generic υπάρχει και λειτουργεί όπως αναμένεται.
-        _fig_geo, _fig_dual, _fig_colors, _fig_mg, results_colors, results_mg, df_h = analyze_sampling_generic(
-            sampling_points=sampling_points_list,
-            first_image_data=first_img_data_generic,
-            first_transform=first_transform_generic,
-            images_folder=images_folder_path,
-            lake_height_path=lake_height_excel_path,
-            selected_points_names=all_point_names_from_kml,
-            date_min=min_date_for_generic,
-            date_max=max_date_for_generic
-        )
-        _debug_ai("AI - Results MG (keys)", list(results_mg.keys()) if results_mg else "Empty")
-        _debug_ai("AI - DataFrame df_h (info)", df_h.info() if not df_h.empty else "Empty")
-
-
-        if not results_mg and df_h.empty:
-            st.warning("Δεν βρέθηκαν επαρκή δεδομένα (τιμές δεικτών ή στάθμης) για την AI ανάλυση μετά την κλήση της analyze_sampling_generic.")
-            st.markdown('</div>', unsafe_allow_html=True); return
-
-        # --- ΒΗΜΑ 2: Δημιουργία Επιλογών UI για τον Χρήστη ---
-        st.subheader("Επιλογές Ανάλυσης AI")
-        ai_task_options = ["Επιλέξτε Εργασία AI...", "Εντοπισμός Ανωμαλιών (Χρονοσειρές)", "Πρόβλεψη Χρονοσειρών", "Εντοπισμός Σημείων Αλλαγής"]
-        selected_ai_task = st.selectbox("Επιλέξτε Εργασία AI:", ai_task_options, key=f"ai_task_select_{waterbody}_{index_name}")
-
-        target_data_options = ["Επιλέξτε Δεδομένα..."]
-        df_avg_mg = pd.DataFrame()
-
-        if results_mg:
-            all_mg_by_date_for_avg = {}
-            points_to_average = all_point_names_from_kml if all_point_names_from_kml else list(results_mg.keys())
-            
-            for point_name in points_to_average:
-                if point_name in results_mg:
-                    for d, v in results_mg[point_name]:
-                        all_mg_by_date_for_avg.setdefault(d, []).append(v)
-            
-            if all_mg_by_date_for_avg:
-                sorted_dates_for_avg = sorted(all_mg_by_date_for_avg.keys())
-                # avg_mg_series_values = [np.mean(all_mg_by_date_for_avg[d]) for d in sorted_dates_for_avg if all_mg_by_date_for_avg[d]] # Αποφυγή warning με κενή λίστα
-                avg_mg_series_values = []
-                for d_val in sorted_dates_for_avg:
-                    if all_mg_by_date_for_avg[d_val]: # Αν η λίστα δεν είναι κενή
-                        avg_mg_series_values.append(np.mean(all_mg_by_date_for_avg[d_val]))
-                    else: # Αν είναι κενή, προσθέτουμε NaN για να διατηρήσουμε το μήκος
-                        avg_mg_series_values.append(np.nan)
-
-                if any(not np.isnan(v) for v in avg_mg_series_values): # Αν υπάρχει τουλάχιστον μια μη-NaN τιμή
-                    target_data_options.append(f"Μέσος Όρος {index_name} (mg/m³)")
-                    df_avg_mg = pd.DataFrame({'Date': pd.to_datetime(sorted_dates_for_avg), 'Value': avg_mg_series_values})
-                    df_avg_mg = df_avg_mg.sort_values(by='Date').set_index('Date')
-        _debug_ai("AI - Calculated df_avg_mg", df_avg_mg)
-
-        if not df_h.empty:
-            target_data_options.append("Στάθμη Λίμνης (m)")
-        
-        if sampling_points_list:
-             target_data_options.append("Συγκεκριμένο Σημείο Δειγματοληψίας")
-
-        selected_target_data_str = st.selectbox("Επιλέξτε Χρονοσειρά για Ανάλυση:", target_data_options, key=f"ai_target_data_select_{waterbody}_{index_name}")
-        _debug_ai("AI - Selected Target Data String", selected_target_data_str)
-
-        selected_specific_point = None
-        if selected_target_data_str == "Συγκεκριμένο Σημείο Δειγματοληψίας" and sampling_points_list:
-            point_names = [p[0] for p in sampling_points_list]
-            selected_specific_point = st.selectbox("Επιλέξτε Σημείο:", point_names, key=f"ai_specific_point_select_{waterbody}_{index_name}")
-        _debug_ai("AI - Selected Specific Point", selected_specific_point)
-
-        # --- ΒΗΜΑ 3: Εξαγωγή και Προετοιμασία της Επιλεγμένης Χρονοσειράς ---
-        df_analysis = pd.DataFrame()
-        current_target_label = ""
-
-        if selected_target_data_str == f"Μέσος Όρος {index_name} (mg/m³)":
-            if not df_avg_mg.empty:
-                df_analysis = df_avg_mg.copy()
-                current_target_label = f"Μέσος Όρος {index_name} (mg/m³)"
-        elif selected_target_data_str == "Στάθμη Λίμνης (m)":
-            if not df_h.empty:
-                df_analysis = df_h.rename(columns={'Height': 'Value'}).copy()
-                df_analysis['Date'] = pd.to_datetime(df_analysis['Date'])
-                df_analysis = df_analysis.sort_values(by='Date').set_index('Date')
-                current_target_label = "Στάθμη Λίμνης (m)"
-        elif selected_target_data_str == "Συγκεκριμένο Σημείο Δειγματοληψίας" and selected_specific_point:
-            if selected_specific_point in results_mg and results_mg[selected_specific_point]:
-                point_data = results_mg[selected_specific_point]
-                df_analysis = pd.DataFrame(point_data, columns=['Date', 'Value'])
-                df_analysis['Date'] = pd.to_datetime(df_analysis['Date'])
-                df_analysis = df_analysis.sort_values(by='Date').set_index('Date')
-                current_target_label = f"Σημείο: {selected_specific_point} ({index_name} mg/m³)"
-        
-        _debug_ai(f"AI - df_analysis BEFORE dropna for '{current_target_label}'", df_analysis)
-
-        if not df_analysis.empty and 'Value' in df_analysis.columns:
-            df_analysis.dropna(subset=['Value'], inplace=True)
-            _debug_ai(f"AI - df_analysis AFTER dropna for '{current_target_label}'", df_analysis)
-            
-            if len(df_analysis) < 10: # Ελάχιστο όριο για τις περισσότερες αναλύσεις AI
-                 st.warning(f"Η επιλεγμένη χρονοσειρά ('{current_target_label if current_target_label else selected_target_data_str}') έχει {len(df_analysis)} έγκυρα σημεία δεδομένων μετά την αφαίρεση NaN. Τα αποτελέσματα AI ενδέχεται να μην είναι αξιόπιστα ή δυνατά.")
-            
-            st.subheader("Επισκόπηση Επιλεγμένης Χρονοσειράς")
-            if not df_analysis.empty:
-                fig_selected_ts = px.line(df_analysis.reset_index(), x='Date', y='Value', title=f"Χρονοσειρά: {current_target_label if current_target_label else selected_target_data_str}")
-                st.plotly_chart(fig_selected_ts, use_container_width=True)
-            else:
-                st.info(f"Η χρονοσειρά '{current_target_label if current_target_label else selected_target_data_str}' είναι κενή μετά την αφαίρεση μη έγκυρων τιμών.")
-
-        elif selected_target_data_str != "Επιλέξτε Δεδομένα..." and selected_ai_task != "Επιλέξτε Εργασία AI...":
-             st.info(f"Παρακαλώ επιλέξτε έγκυρη χρονοσειρά για ανάλυση AI. Η τρέχουσα επιλογή ('{selected_target_data_str}') δεν παρήγαγε δεδομένα.")
-        
-        _debug_ai("AI - Final df_analysis to be used for AI", df_analysis)
-
-        # --- ΒΗΜΑ 4: Εκτέλεση της Επιλεγμένης Εργασίας AI ---
-        execute_ai_condition = (
-            not df_analysis.empty and 
-            'Value' in df_analysis.columns and 
-            len(df_analysis) >= 10 and 
-            selected_ai_task != "Επιλέξτε Εργασία AI..."
-        )
-        _debug_ai("AI - Condition to execute AI block", execute_ai_condition)
-
-        if execute_ai_condition:
-            # Χρησιμοποιούμε πιο σταθερά κλειδιά για τα widgets, αποφεύγοντας το timestamp αν δεν είναι απαραίτητο για μοναδικότητα εντός της ίδιας εκτέλεσης
-            base_key_prefix_ai = f"ai_{waterbody}_{index_name}_{selected_target_data_str.replace(' ','_').replace('/','_').replace('(','').replace(')','').replace(':','_')}_{selected_ai_task.replace(' ','_')}"
-
-            if selected_ai_task == "Εντοπισμός Ανωμαλιών (Χρονοσειρές)":
-                _debug_ai("AI - Entering Anomaly Detection UI Block", True)
-                st.subheader("Αποτελέσματα Εντοπισμού Ανωμαλιών")
-                contamination_rate = st.slider("Ευαισθησία Εντοπισμού (contamination):", 0.01, 0.25, 0.05, 0.01, help="Το αναμενόμενο ποσοστό ανωμαλιών στα δεδομένα. Μικρότερη τιμή σημαίνει λιγότερες, πιο ακραίες ανωμαλίες.", key=f"anomaly_contamination_{base_key_prefix_ai}")
-                
-                if st.button("Εκτέλεση Εντοπισμού Ανωμαλιών", key=f"run_anomaly_detection_{base_key_prefix_ai}"):
-                    _debug_ai("AI - Anomaly Detection Button Clicked", True)
-                    with st.spinner("Εντοπισμός ανωμαλιών..."):
-                        try:
-                            model_if = IsolationForest(contamination=contamination_rate, random_state=42, n_estimators=100)
-                            df_analysis_copy = df_analysis.copy() # Δουλεύουμε σε αντίγραφο για να μην αλλάξουμε το αρχικό df_analysis
-                            df_analysis_copy['Anomaly_IF'] = model_if.fit_predict(df_analysis_copy[['Value']])
-                            anomalies = df_analysis_copy[df_analysis_copy['Anomaly_IF'] == -1]
-                            _debug_ai("AI - Anomaly Detection - Anomalies Found", anomalies)
-                            
-                            fig_anomalies = px.line(df_analysis_copy.reset_index(), x='Date', y='Value', title=f"Εντοπισμός Ανωμαλιών: {current_target_label}")
-                            if not anomalies.empty:
-                                fig_anomalies.add_trace(go.Scatter(x=anomalies.index, y=anomalies['Value'], mode='markers',
-                                                                marker=dict(color='red', size=10, symbol='x'), name='Ανωμαλίες'))
-                                st.write(f"Βρέθηκαν {len(anomalies)} πιθανές ανωμαλίες.")
-                                st.dataframe(anomalies.reset_index()[['Date', 'Value']])
-                                add_excel_download_button(anomalies.reset_index()[['Date', 'Value']], f"{waterbody}_{index_name}_anomalies", f"Anomalies_{current_target_label.replace(':','_').replace('/','_')}", f"excel_anomalies_{base_key_prefix_ai}")
-                            else:
-                                st.success("Δεν εντοπίστηκαν ανωμαλίες με τις τρέχουσες παραμέτρους.")
-                            st.plotly_chart(fig_anomalies, use_container_width=True)
-                        except Exception as e:
-                            st.error(f"Παρουσιάστηκε σφάλμα κατά τον εντοπισμό ανωμαλιών: {e}")
-                            st.error("Βεβαιωθείτε ότι η βιβλιοθήκη scikit-learn είναι εγκατεστημένη και τα δεδομένα είναι κατάλληλα.")
-
-            elif selected_ai_task == "Πρόβλεψη Χρονοσειρών":
-                _debug_ai("AI - Entering Forecasting UI Block", True)
-                st.subheader("Αποτελέσματα Πρόβλεψης Χρονοσειρών")
-                if len(df_analysis) < 5: 
-                     st.warning(f"Πολύ λίγα δεδομένα ({len(df_analysis)} σημεία) για αξιόπιστη πρόβλεψη με Prophet.")
-                else:
-                    forecast_periods = st.number_input("Περίοδοι Πρόβλεψης (π.χ., ημέρες):", min_value=1, max_value=365, value=30, key=f"forecast_periods_{base_key_prefix_ai}")
-                    
-                    if st.button("Εκτέλεση Πρόβλεψης", key=f"run_forecasting_{base_key_prefix_ai}"):
-                        _debug_ai("AI - Forecasting Button Clicked", True)
-                        with st.spinner("Γίνεται πρόβλεψη..."):
-                            try:
-                                df_prophet = df_analysis.reset_index().rename(columns={'Date': 'ds', 'Value': 'y'})
-                                df_prophet.dropna(subset=['y'], inplace=True)
-                                _debug_ai("AI - DataFrame for Prophet (df_prophet)", df_prophet)
-                                if len(df_prophet) < 2:
-                                     st.error(f"Πολύ λίγα σημεία δεδομένων ({len(df_prophet)}) για την Prophet μετά την αφαίρεση NaNs από τις τιμές 'y'.")
-                                else:
-                                    model_prophet = Prophet()
-                                    model_prophet.fit(df_prophet)
-                                    future = model_prophet.make_future_dataframe(periods=forecast_periods)
-                                    forecast = model_prophet.predict(future)
-                                    _debug_ai("AI - Prophet Forecast Output (tail)", forecast.tail())
-                                    
-                                    # Χρήση make_subplots για καλύτερο έλεγχο του μεγέθους του γραφήματος της Prophet
-                                    fig_prophet_streamlit = go.Figure()
-                                    fig_prophet_streamlit.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat'], mode='lines', name='Πρόβλεψη (yhat)', line=dict(color='blue')))
-                                    fig_prophet_streamlit.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_upper'], mode='lines', name='Άνω Όριο CI', line=dict(color='rgba(0,114,178,0.2)')))
-                                    fig_prophet_streamlit.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_lower'], mode='lines', name='Κάτω Όριο CI', line=dict(color='rgba(0,114,178,0.2)'), fill='tonexty', fillcolor='rgba(0,114,178,0.2)'))
-                                    fig_prophet_streamlit.add_trace(go.Scatter(x=df_prophet['ds'], y=df_prophet['y'], mode='markers', name='Πραγματικές Τιμές', marker=dict(color='black', size=5)))
-                                    fig_prophet_streamlit.update_layout(title=f"Πρόβλεψη Χρονοσειράς με Prophet: {current_target_label}", xaxis_title="Ημερομηνία", yaxis_title="Τιμή")
-                                    st.plotly_chart(fig_prophet_streamlit, use_container_width=True)
-                                    
-                                    st.write("Λεπτομέρειες Πρόβλεψης (Prophet):")
-                                    forecast_to_show = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
-                                    forecast_to_show.rename(columns={'ds':'Date', 'yhat':'Predicted', 'yhat_lower':'Lower_CI', 'yhat_upper':'Upper_CI'}, inplace=True)
-                                    st.dataframe(forecast_to_show.tail(forecast_periods))
-                                    add_excel_download_button(forecast_to_show, f"{waterbody}_{index_name}_forecast", f"Forecast_{current_target_label.replace(':','_').replace('/','_')}", f"excel_forecast_ai_{base_key_prefix_ai}")
-
-                            except Exception as e:
-                                st.error(f"Παρουσιάστηκε σφάλμα κατά την πρόβλεψη: {e}")
-                                st.error("Βεβαιωθείτε ότι η βιβλιοθήκη Prophet είναι εγκατεστημένη και τα δεδομένα είναι κατάλληλα.")
-            
-            elif selected_ai_task == "Εντοπισμός Σημείων Αλλαγής":
-                _debug_ai("AI - Entering Change Point Detection UI Block", True)
-                st.subheader("Αποτελέσματα Εντοπισμού Σημείων Αλλαγής")
-                if len(df_analysis) < 3: 
-                    st.warning(f"Πολύ λίγα δεδομένα ({len(df_analysis)} σημεία) για εντοπισμό σημείων αλλαγής.")
-                else:
-                    model_rpt_options = ["L1", "L2", "Rbf", "Normal", "Rank"]
-                    selected_model_rpt = st.selectbox("Μοντέλο Κόστους (Ruptures):", model_rpt_options, index=2, key=f"rpt_model_{base_key_prefix_ai}")
-                    
-                    default_pen = max(1.0, np.log(len(df_analysis)) * np.nanstd(df_analysis['Value']) * 1.5 if len(df_analysis) > 1 and not np.all(np.isnan(df_analysis['Value'])) else 3.0)
-                    if np.isnan(default_pen) or default_pen <= 0: default_pen = 3.0
-
-                    pen_value = st.number_input("Τιμή Penalty (Ruptures):", min_value=0.1, value=float(default_pen), format="%.2f", key=f"rpt_pen_{base_key_prefix_ai}", help="Μεγαλύτερη τιμή οδηγεί σε λιγότερα σημεία αλλαγής.")
-
-                    if st.button("Εκτέλεση Εντοπισμού Σημείων Αλλαγής", key=f"run_changepoint_{base_key_prefix_ai}"):
-                        _debug_ai("AI - Change Point Detection Button Clicked", True)
-                        with st.spinner("Εντοπισμός σημείων αλλαγής..."):
-                            try:
-                                points_for_rpt = df_analysis['Value'].values # Πρέπει να είναι numpy array για το ruptures
-                                _debug_ai("AI - Points for Ruptures (first 10)", points_for_rpt[:10])
-                                algo = rpt.Pelt(model=selected_model_rpt.lower()).fit(points_for_rpt)
-                                result_bkps_indices = algo.predict(pen=pen_value) 
-                                _debug_ai("AI - Ruptures - Breakpoint Indices", result_bkps_indices)
-                                
-                                fig_changepoints_plotly = px.line(df_analysis.reset_index(), x='Date', y='Value', title=f"Εντοπισμός Σημείων Αλλαγής: {current_target_label}")
-                                bkpt_dates_list = []
-                                for bkpt_idx in result_bkps_indices:
-                                    if 0 < bkpt_idx < len(points_for_rpt):
-                                        change_date = df_analysis.index[bkpt_idx-1]
-                                        bkpt_dates_list.append(change_date)
-                                        fig_changepoints_plotly.add_vline(x=change_date, line_width=2, line_dash="dash", line_color="red", annotation_text=f"Αλλαγή {change_date.strftime('%Y-%m-%d')}", annotation_position="top left")
-                                
-                                st.plotly_chart(fig_changepoints_plotly, use_container_width=True)
-
-                                if bkpt_dates_list:
-                                    st.write(f"Εντοπίστηκαν {len(bkpt_dates_list)} σημεία αλλαγής.")
-                                    df_bkpts = pd.DataFrame({'Change_Point_Date': sorted(list(set(bkpt_dates_list)))})
-                                    st.dataframe(df_bkpts)
-                                    add_excel_download_button(df_bkpts, f"{waterbody}_{index_name}_changepoints", f"ChangePoints_{current_target_label.replace(':','_').replace('/','_')}", f"excel_changepoints_ai_{base_key_prefix_ai}")
-                                else:
-                                    st.success("Δεν εντοπίστηκαν σημαντικά σημεία αλλαγής με τις τρέχουσες παραμέτρους.")
-                            except Exception as e:
-                                st.error(f"Παρουσιάστηκε σφάλμα κατά τον εντοπισμό σημείων αλλαγής: {e}")
-                                st.error("Βεβαιωθείτε ότι η βιβλιοθήκη ruptures είναι εγκατεστημένη και τα δεδομένα είναι κατάλληλα.")
-        
-        elif selected_ai_task == "Επιλέξτε Εργασία AI..." and selected_target_data_str != "Επιλέξτε Δεδομένα...":
-            st.info("Παρακαλώ επιλέξτε μια εργασία AI από την παραπάνω λίστα για να ενεργοποιηθούν οι επιλογές εκτέλεσης.")
-        
-        elif selected_target_data_str != "Επιλέξτε Δεδομένα..." and (df_analysis.empty or 'Value' not in df_analysis.columns or len(df_analysis) < 10) :
-             if df_analysis.empty or 'Value' not in df_analysis.columns :
-                st.warning(f"Η επιλεγμένη χρονοσειρά '{current_target_label if current_target_label else selected_target_data_str}' δεν περιέχει έγκυρα δεδομένα για ανάλυση AI.")
-             elif len(df_analysis) < 10 :
-                st.warning(f"Η επιλεγμένη χρονοσειρά '{current_target_label if current_target_label else selected_target_data_str}' έχει λιγότερα από 10 έγκυρα σημεία δεδομένων ({len(df_analysis)}). Η ανάλυση AI δεν θα εκτελεστεί.")
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
 def main_app():
     inject_custom_css() 
@@ -2080,7 +1730,7 @@ def main_app():
         elif selected_an == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
             run_predictive_tools(selected_wb, selected_idx)
         elif selected_an == "Προηγμένη Ανάλυση Προτύπων (AI)": # <--- Η ΝΕΑ ΚΛΗΣΗ
-            run_ai_driven_analysis(selected_wb, selected_idx)
+             run_ai_driven_analysis(selected_wb, selected_idx)
     else:
         st.warning(f"Δεν υπάρχουν διαθέσιμες αναλύσεις ή δεδομένα για τον συνδυασμό: "
                    f"Υδάτινο Σώμα '{selected_wb}' και Δείκτης '{selected_idx}'. "
