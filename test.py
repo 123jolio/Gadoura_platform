@@ -42,44 +42,68 @@ st.set_page_config(layout="wide", page_title="Ανάλυση Ποιότητας 
 
 # --- AUTHENTICATION SETUP ---
 
-# --- STEP 1: (REMOVED - NO LONGER NEEDED) ---
+# --- STEP 1: HASH PASSWORD GENERATION (Run ONCE) ---
+# =======================================================================================
+# UNCOMMENT THIS BLOCK THE FIRST TIME YOU RUN TO GENERATE THE HASH.
+# COPY THE OUTPUT AND PASTE IT INTO 'hashed_passwords' in STEP 3.
+# THEN, RE-COMMENT OR DELETE THIS BLOCK.
+#
+# passwords_to_hash = ['123'] # <--- Enter your desired plain-text password(s) here
+# try:
+#     hashed_passwords_output = stauth.Hasher(passwords_to_hash).generate()
+#     st.write("--- IMPORTANT: HASHED PASSWORD GENERATION (Temporary) ---")
+#     st.write("1. Copy this entire list (including the square brackets and quotes).")
+#     st.write("2. Paste it to replace the `hashed_passwords` variable below (in STEP 3).")
+#     st.write("3. After pasting, comment out or delete this entire 'STEP 1' block.")
+#     st.write("4. Re-run the Streamlit app.")
+#     st.write("Generated Hashes:", hashed_passwords_output)
+#     st.stop() # Stops the app here after printing
+# except Exception as e_hash:
+#      st.error(f"Error generating password hashes: {e_hash}")
+#      st.stop()
+# =======================================================================================
 
-# --- STEP 2: Define your users and their credentials ---
-# Ensure there are no trailing non-ASCII spaces here!
-names = ["Ilioumbas User"]  # Display name(s) for your user(s)
-usernames = ["ilioumbas"]   # Username(s) for login
-# Define plain text passwords here.
-# The library will hash them automatically.
-plain_text_passwords = ["123"] # <--- YOUR PLAIN TEXT PASSWORD(S)
 
-# --- STEP 3: Create credentials dictionary using PLAIN TEXT passwords ---
+# --- STEP 2: Define your users ---
+names = ["Ilioumbas User"]  # Display name(s)
+usernames = ["ilioumbas"]   # Username(s)
+
+# --- STEP 3: Define HASHED passwords ---
+# PASTE THE HASHED PASSWORD LIST YOU GENERATED IN STEP 1 HERE.
+# Example: hashed_passwords = ['$2b$12$Eix1a/b1.2c3D4e5F6g7h.iJkLmNoPqRsTuVwXyZ/AbCdEfGhIjK']
+hashed_passwords = ['$2b$12$your_generated_hash_here'] # <--- *** REPLACE THIS WITH YOUR HASH ***
+
+# --- Check for placeholder hash ---
+if hashed_passwords[0] == '$2b$12$your_generated_hash_here':
+    st.error("FATAL ERROR: You MUST generate and paste your actual hashed password in 'hashed_passwords' (STEP 3).")
+    st.info("Please uncomment 'STEP 1', run the app, copy the hash, paste it, and then comment 'STEP 1' again.")
+    st.stop()
+
+# --- STEP 4: Create credentials dictionary using HASHED passwords ---
 credentials = {"usernames": {}}
-if len(names) == len(usernames) == len(plain_text_passwords): # Basic check
+if len(names) == len(usernames) == len(hashed_passwords):
     for i in range(len(usernames)):
         credentials["usernames"][usernames[i]] = {
             "name": names[i],
-            "password": plain_text_passwords[i]  # Use plain text password
+            "password": hashed_passwords[i]  # Use HASHED password
         }
 else:
-    st.error("Σφάλμα: Οι λίστες ονομάτων, ονομάτων χρήστη και κωδικών πρόσβασης πρέπει να έχουν τον ίδιο αριθμό στοιχείων.")
-    st.error("Βεβαιωθείτε ότι έχετε ορίσει σωστά τους χρήστες και τους κωδικούς πρόσβασής τους.")
-    st.error(f"Debug: len(names)={len(names)}, len(usernames)={len(usernames)}, len(plain_text_passwords)={len(plain_text_passwords)}")
+    st.error("Error: The lists for names, usernames, and hashed_passwords must match.")
     st.stop()
 
-# --- STEP 4: Initialize the Authenticator ---
+# --- STEP 5: Initialize the Authenticator ---
 authenticator = None
 try:
     authenticator = stauth.Authenticate(
         credentials,
-        "water_quality_app_cookie_v8",    # Changed cookie name for freshness
-        "a_very_random_secret_key_v8",  # Changed key for freshness
-        cookie_expiry_days=30
-        # auto_hash=True # This is the default, no need to set it explicitly
+        "water_quality_app_cookie_v9",    # Changed cookie name for freshness
+        "a_very_random_secret_key_v9",  # Changed key for freshness
+        cookie_expiry_days=30,
+        preauthorized=False # Ensure preauthorized is False
     )
 except Exception as e:
     logger.error(f"Error during stauth.Authenticate initialization: {e}", exc_info=True)
     st.error(f"Σφάλμα αρχικοποίησης συστήματος αυθεντικοποίησης: {e}")
-    st.error("Αυτό συμβαίνει συχνά εάν το λεξικό 'credentials' είναι εσφαλμένο ή υπάρχει πρόβλημα με τη βιβλιοθήκη.")
     st.stop()
 
 # --- Global Configuration & Constants ---
@@ -282,7 +306,6 @@ def parse_sampling_kml(kml_source) -> list:
     points = []
     try:
         if hasattr(kml_source, "seek"): kml_source.seek(0)
-        # Use ET.parse directly, handles both file paths and file-like objects
         tree = ET.parse(kml_source)
         root = tree.getroot()
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
@@ -881,7 +904,7 @@ def image_navigation_ui(images_folder: str, available_dates_map: dict,
                 theme_bg = st.get_option("theme.backgroundColor")
                 theme_text = st.get_option("theme.textColor")
                 legend_fig = create_chl_legend_figure(orientation="horizontal", theme_bg_color=theme_bg, theme_text_color=theme_text)
-            except:
+            except: # Fallback
                 legend_fig = create_chl_legend_figure(orientation="horizontal")
             st.pyplot(legend_fig)
     else:
@@ -1010,13 +1033,17 @@ def run_water_quality_dashboard(waterbody: str, index_name: str):
 
         data_folder = get_data_folder(waterbody, index_name)
         if not data_folder:
-            st.error(f"Φάκελος δεδομένων για '{waterbody} - {index_name}' δεν βρέθηκε. Παρακαλώ ελέγξτε τις ρυθμίσεις και τη δομή των φακέλων σας.")
+            st.error(f"Φάκελος δεδομένων για '{waterbody} - {index_name}' δεν βρέθηκε.")
             st.markdown('</div>', unsafe_allow_html=True); return
 
         images_folder_path = os.path.join(data_folder,"GeoTIFFs")
         lake_height_excel_path = os.path.join(data_folder,"lake height.xlsx")
         default_sampling_kml_path = os.path.join(data_folder,"sampling.kml")
         vid_path = next((p for n in ["timelapse.mp4","timelapse.gif","Sentinel-2_L1C-202307221755611-timelapse.gif"] for p in [os.path.join(data_folder,n), os.path.join(images_folder_path,n)] if os.path.exists(p)), None)
+
+        if not os.path.isdir(images_folder_path):
+             st.error(f"Ο φάκελος 'GeoTIFFs' δεν βρέθηκε μέσα στο '{data_folder}'.")
+             st.markdown('</div>', unsafe_allow_html=True); return
 
         st.sidebar.subheader(f"Ρυθμίσεις Πίνακα ({index_name})")
         available_tifs = {str(d.date()):fn for fn in (os.listdir(images_folder_path) if os.path.exists(images_folder_path) else []) if fn.lower().endswith(('.tif','.tiff')) for _,d in [extract_date_from_filename(fn)] if d}
@@ -1070,8 +1097,11 @@ def run_water_quality_dashboard(waterbody: str, index_name: str):
 
                     with n_tabs_def_display[0]:
                         st.plotly_chart(fig_g, use_container_width=True, key=f"geo_d_chart_disp_{tab_prefix_key}")
-                        # ... (Excel Download Logic) ...
-                        if index_name == "Χλωροφύλλη": st.pyplot(create_chl_legend_figure()) # Simplified legend call
+                        # Excel Download Logic
+                        if current_def_pts_list:
+                             points_to_export_df = pd.DataFrame([pt for pt in current_def_pts_list if pt[0] in current_sel_pts_def_names_for_plot], columns=['PointName', 'Longitude', 'Latitude'])
+                             if not points_to_export_df.empty: add_excel_download_button(points_to_export_df, f"{common_filename_prefix_dash}_default", "Sampling Points", f"excel_geo_def_{tab_prefix_key}")
+                        if index_name == "Χλωροφύλλη": st.pyplot(create_chl_legend_figure())
 
                     with n_tabs_def_display[1]:
                         image_navigation_ui(images_folder_path,available_tifs,SESSION_KEY_CURRENT_IMAGE_INDEX_DASH_DEF,f"nav_def_disp_{key_suffix_dash}",index_name=="Χλωροφύλλη",index_name)
@@ -1086,20 +1116,46 @@ def run_water_quality_dashboard(waterbody: str, index_name: str):
                     with n_tabs_def_display[3]:
                         c1_disp,c2_disp=st.columns([.85,.15])
                         c1_disp.plotly_chart(fig_c, use_container_width=True, key=f"colors_d_chart_disp_{tab_prefix_key}")
-                        # ... (Excel Download Logic) ...
+                        # Excel Download Logic
+                        excel_sheets_colors = {}
+                        if isinstance(df_h_data, pd.DataFrame) and not df_h_data.empty: excel_sheets_colors['LakeHeight'] = df_h_data.copy()
+                        if res_c_data:
+                            for point_name, data_list in res_c_data.items():
+                                if data_list and (point_name in current_sel_pts_def_names_for_plot):
+                                    df_point_colors = pd.DataFrame(data_list, columns=['Date', 'RGB_Normalized'])
+                                    df_point_colors[['R_norm', 'G_norm', 'B_norm']] = pd.DataFrame(df_point_colors['RGB_Normalized'].tolist(), index=df_point_colors.index)
+                                    excel_sheets_colors[f"{point_name}_Colors"] = df_point_colors[['Date', 'R_norm', 'G_norm', 'B_norm']].sort_values(by="Date")
+                        if excel_sheets_colors: add_excel_download_button(excel_sheets_colors, f"{common_filename_prefix_dash}_default", "Pixel Colors and Height", f"excel_colors_def_{tab_prefix_key}")
                         if index_name=="Χλωροφύλλη": c2_disp.pyplot(create_chl_legend_figure("vertical"))
 
                     with n_tabs_def_display[4]:
                         st.plotly_chart(fig_m, use_container_width=True, key=f"mg_d_chart_disp_{tab_prefix_key}")
-                        # ... (Excel Download Logic) ...
+                        # Excel Download Logic
+                        temp_all_mg_by_d_loc = {d: np.mean(v) for d, v in {d_obj: [val for _, val in res_m_data[p_n] if d_obj == _] for p_n in current_sel_pts_def_names_for_plot if p_n in res_m_data for _, val in res_m_data[p_n]}.items()}
+                        if temp_all_mg_by_d_loc:
+                            s_dts_mg_temp_loc = sorted(temp_all_mg_by_d_loc.keys())
+                            mean_mg_temp_loc = [temp_all_mg_by_d_loc[d] for d in s_dts_mg_temp_loc]
+                            df_mean_mg = pd.DataFrame({'Date': s_dts_mg_temp_loc, 'Mean_mg_m3': mean_mg_temp_loc}).sort_values(by="Date")
+                            add_excel_download_button(df_mean_mg, f"{common_filename_prefix_dash}_default", "Mean mg_m3", f"excel_mean_mg_def_{tab_prefix_key}")
 
                     with n_tabs_def_display[5]:
                         st.plotly_chart(fig_d, use_container_width=True, key=f"dual_d_chart_disp_{tab_prefix_key}")
-                        # ... (Excel Download Logic) ...
+                        # Excel Download Logic
+                        # ...
 
                     with n_tabs_def_display[6]:
-                        # ... (Detailed Point Plotting and Excel Download) ...
-                        pass # Placeholder
+                        point_options_for_detail = current_sel_pts_def_names_for_plot
+                        if point_options_for_detail:
+                            sel_pt_d_disp = st.selectbox("Σημείο για mg/m³:", point_options_for_detail, key=f"detail_d_sel_disp_{tab_prefix_key}")
+                            if sel_pt_d_disp and res_m_data.get(sel_pt_d_disp):
+                                mg_d_p_list = sorted(res_m_data[sel_pt_d_disp], key=lambda x: x[0])
+                                if mg_d_p_list:
+                                    dts_detail, vals_detail = zip(*mg_d_p_list)
+                                    fig_det_d_disp = px.scatter(x=list(dts_detail),y=list(vals_detail), title=f"mg/m³ για {sel_pt_d_disp}", labels={'x':'Ημερομηνία', 'y':'mg/m³'})
+                                    st.plotly_chart(fig_det_d_disp,use_container_width=True, key=f"detail_d_chart_disp_{tab_prefix_key}")
+                                    df_point_mg_detail = pd.DataFrame({'Date': list(dts_detail), f'mg_m3': list(vals_detail)}).sort_values(by="Date")
+                                    add_excel_download_button(df_point_mg_detail, f"{common_filename_prefix_dash}_default_point_{sel_pt_d_disp}", f"mg_m3 for {sel_pt_d_disp}", f"excel_detail_mg_def_{sel_pt_d_disp}_{tab_prefix_key}")
+                        else: st.caption("Δεν έχουν επιλεγεί σημεία.")
 
                 else: st.error("Σφάλμα μορφής αποτελεσμάτων (Προεπιλογή).")
 
@@ -1125,8 +1181,17 @@ def run_water_quality_dashboard(waterbody: str, index_name: str):
 
             if SESSION_KEY_UPLOAD_RESULTS_DASHBOARD in st.session_state and st.session_state[SESSION_KEY_UPLOAD_RESULTS_DASHBOARD]:
                 res_upl = st.session_state[SESSION_KEY_UPLOAD_RESULTS_DASHBOARD]
-                # ... (Similar Tabbed Display Logic as for Default Sampling) ...
-                pass # Placeholder
+                current_upl_pts_list = st.session_state.get(f"upl_pts_list{key_suffix_dash}", [])
+                current_sel_pts_upl_names_for_plot = st.session_state.get(f"sel_pts_upl_names{key_suffix_dash}", [p[0] for p in current_upl_pts_list])
+
+                if isinstance(res_upl, tuple) and len(res_upl) == 7:
+                    fig_g_u, fig_d_u, fig_c_u, fig_m_u, res_c_data_u, res_m_data_u, df_h_data_u = res_upl
+                    n_tabs_u_titles = ["GeoTIFF","Εικόνες","Video/GIF","Χρώματα","Μέσο mg/m³","Διπλό","mg/m³ ανά Σημείο"]
+                    n_tabs_upl_display = st.tabs(n_tabs_u_titles)
+                    tab_prefix_key_upl = f"upl_tab_{key_suffix_dash}"
+                    # ... (Implement the display logic for upload tabs, similar to default tabs) ...
+                else:
+                    st.error("Σφάλμα μορφής αποτελεσμάτων (Upload KML).")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1295,14 +1360,12 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
                         if fig_to_plot_cols:
                             fig_to_plot_cols.update_layout(height=400, uirevision=f"{fig_internal_key_iter}_{idx_name_iter_cols}_col{key_suffix_pred_section}")
                             st.plotly_chart(fig_to_plot_cols, use_container_width=True, key=f"chart_{fig_internal_key_iter}_{idx_name_iter_cols}_col{key_suffix_pred_section}")
-                            # Add Excel download if needed for each plot
                         else:
                             st.caption(f"Δεν υπάρχουν δεδομένα για '{chart_name_key_iter}' ({idx_name_iter_cols}).")
 
                 st.markdown("""<hr style="border:1px solid #444; margin-top:1.5rem; margin-bottom:1.5rem;">""", unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
-
 
 # --- Main Application Logic ---
 
@@ -1344,19 +1407,27 @@ def main_app():
 
 if __name__ == "__main__":
     if authenticator:
-        # Render the login form in the main body
-        # This function handles the login process and updates session_state
-        name, authentication_status, username = authenticator.login('main')
+        try:
+            # Render the login form
+            name, authentication_status, username = authenticator.login('main')
 
-        # Check authentication status from session_state
-        auth_status = st.session_state.get("authentication_status")
+            # Check authentication status
+            auth_status = st.session_state.get("authentication_status")
 
-        if auth_status:
-            # If user is authenticated, run the main application
-            main_app()
-        elif auth_status is False:
-            st.error('Το όνομα χρήστη ή ο κωδικός πρόσβασης είναι λανθασμένος (Username/password is incorrect)')
-        elif auth_status is None:
-            st.warning('Παρακαλώ εισάγετε το όνομα χρήστη και τον κωδικό πρόσβασής σας (Please enter your username and password)')
+            if auth_status:
+                main_app()
+            elif auth_status is False:
+                st.error('Το όνομα χρήστη ή ο κωδικός πρόσβασης είναι λανθασμένος')
+            elif auth_status is None:
+                st.warning('Παρακαλώ εισάγετε το όνομα χρήστη και τον κωδικό πρόσβασής σας')
+
+        except TypeError as e:
+            logger.error(f"TypeError during login or app run: {e}", exc_info=True)
+            st.error(f"Προέκυψε ένα σφάλμα τύπου (TypeError): {e}")
+            st.error("Αυτό μπορεί να οφείλεται σε ασυμβατότητα δεδομένων ή πρόβλημα στη βιβλιοθήκη αυθεντικοποίησης. Ελέγξτε ότι οι κωδικοί (hashes) είναι σωστοί.")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in main execution: {e}", exc_info=True)
+            st.error(f"Προέκυψε ένα μη αναμενόμενο σφάλμα: {e}")
+            st.info("Ελέγξτε τα αρχεία καταγραφής (logs) για περισσότερες λεπτομέρειες.")
     else:
-        st.error("Το σύστημα αυθεντικοποίησης απέτυχε να αρχικοποιηθεί. Ελέγξτε τα αρχεία καταγραφής.")
+        st.error("Το σύστημα αυθεντικοποίησης απέτυχε να αρχικοποιηθεί.")
