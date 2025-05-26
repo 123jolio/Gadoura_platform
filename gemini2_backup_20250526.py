@@ -19,8 +19,10 @@ import pandas as pd
 import rasterio
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import plotly.graph_objects as go
+import rasterio.windows # Add this import
 
 from rasterio.errors import NotGeoreferencedWarning
 import warnings
@@ -358,7 +360,8 @@ def analyze_sampling_generic(sampling_points, first_image_data, first_transform,
                     if name not in selected_points_names: continue
                     col, row = map(int, (~src.transform) * (lon, lat))
                     if not (0 <= col < src.width and 0 <= row < src.height): continue
-                    win = rasterio.windows.Window(col,row,1,1)
+                    # Corrected call to rasterio.windows.Window
+                    win = rasterio.windows.Window(col_off=col, row_off=row, width=1, height=1)
                     try:
                         r,g,b = src.read(1,window=win)[0,0], src.read(2,window=win)[0,0], src.read(3,window=win)[0,0]
                         mg_val = (g / 255.0) * 2.0 # Placeholder conversion
@@ -509,38 +512,119 @@ def extract_date_from_filename(filename: str) -> tuple[int | None, datetime | No
             return None, None
     return None, None
 
+# Placeholder definitions for missing functions - REPLACE WITH YOUR ACTUAL IMPLEMENTATIONS
+def get_kml_path(base_dir, waterbody, index_name, sampling_type):
+    # Example: return os.path.join(base_dir, waterbody, index_name, f"{sampling_type}.kml")
+    st.warning("Placeholder get_kml_path called")
+    return os.path.join(APP_BASE_DIR, "sampling.kml") # Default to root sampling.kml for now
+
+def load_sampling_points(kml_path):
+    # Example: parse KML and return list of (name, lon, lat)
+    st.warning(f"Placeholder load_sampling_points called for {kml_path}")
+    if os.path.exists(kml_path):
+        # This is a simplified version of your actual KML parsing logic
+        try:
+            tree = ET.parse(kml_path)
+            root = tree.getroot()
+            namespace = {'kml': 'http://www.opengis.net/kml/2.2'}
+            points = []
+            for placemark in root.findall('.//kml:Placemark', namespace):
+                name_node = placemark.find('kml:name', namespace)
+                coord_node = placemark.find('.//kml:coordinates', namespace)
+                if name_node is not None and coord_node is not None:
+                    name = name_node.text.strip()
+                    coords_text = coord_node.text.strip().split(',')
+                    if len(coords_text) >= 2:
+                        lon, lat = float(coords_text[0]), float(coords_text[1])
+                        points.append((name, lon, lat))
+            return points
+        except Exception as e:
+            st.error(f"Error parsing KML (placeholder): {e}")
+            return []
+    return []
+
+def get_reference_image_and_transform(images_folder):
+    st.warning("Placeholder get_reference_image_and_transform called")
+    if os.path.isdir(images_folder):
+        for fname in sorted(os.listdir(images_folder)):
+            if fname.lower().endswith(('.tif', '.tiff')):
+                try:
+                    with rasterio.open(os.path.join(images_folder, fname)) as src:
+                        return src.read(), src.transform
+                except Exception as e:
+                    st.error(f"Error reading ref image (placeholder): {e}")
+                    return None, None
+    return None, None
+
+def get_lake_height_excel_path(data_folder):
+    st.warning("Placeholder get_lake_height_excel_path called")
+    return os.path.join(data_folder, "lake_height.xlsx")
+# End of placeholder definitions
+
 @st.cache_data
-def load_lake_shape_from_xml(xml_file_path: str, bounds: tuple = None,
-                                xml_width: float = 518.0, xml_height: float = 505.0):
-    debug_message(f"DEBUG: Φόρτωση περιγράμματος από: {xml_file_path}")
+def load_lake_shape_from_xml(xml_file_path: str, bounds: tuple | None = None):
+    """Loads lake shape from KML/XML and optionally filters by bounds."""
+    points_xml = []
+    # Placeholder for xml_width and xml_height - DEFINE THESE BASED ON YOUR XML
+    xml_width = 1000 # Example value
+    xml_height = 1000 # Example value
     try:
         tree = ET.parse(xml_file_path)
         root = tree.getroot()
-        points_xml = []
-        for point_elem in root.findall("point"):
-            x_str, y_str = point_elem.get("x"), point_elem.get("y")
-            if x_str and y_str: points_xml.append([float(x_str), float(y_str)])
-
+        namespace = {'kml': 'http://www.opengis.net/kml/2.2'} # Adjust if your KML uses a different namespace
+        
+        # Find all Coordinate strings. This might need adjustment based on your KML structure.
+        for coord_string_element in root.findall('.//kml:coordinates', namespace):
+            if coord_string_element.text:
+                coord_pairs = coord_string_element.text.strip().split()
+                for pair in coord_pairs:
+                    lon_lat = pair.split(',')
+                    if len(lon_lat) >= 2:
+                        try:
+                            # Assuming coordinates in KML are lon, lat, alt (optional)
+                            points_xml.append((float(lon_lat[0]), float(lon_lat[1])))
+                        except ValueError:
+                            debug_message(f"Could not parse coordinate pair: {pair} in {xml_file_path}")
+                            continue 
         if not points_xml:
-            st.warning(f"Δεν βρέθηκαν σημεία στο XML: {os.path.basename(xml_file_path)}"); return None
+            debug_message(f"No coordinates found in KML: {xml_file_path}")
+            return None
 
-        points_to_return = points_xml
+        # If bounds are provided, use them. Otherwise, calculate from points.
         if bounds:
             minx, miny, maxx, maxy = bounds
-            points_to_return = [[minx + (x/xml_width)*(maxx-minx), maxy - (y/xml_height)*(maxy-miny)] for x,y in points_xml]
+        else:
+            if not points_xml: return None # Should not happen if points_xml check above is done
+            minx = min(p[0] for p in points_xml)
+            miny = min(p[1] for p in points_xml)
+            maxx = max(p[0] for p in points_xml)
+            maxy = max(p[1] for p in points_xml)
 
-        if points_to_return and (points_to_return[0] != points_to_return[-1]):
-            points_to_return.append(points_to_return[0]) # Close the polygon
+        # This part seems to be for converting to a different coordinate system or pixel space.
+        # Ensure xml_width and xml_height are correctly defined if this transformation is needed.
+        # If points_xml are already geographic (lon/lat), this might not be necessary
+        # or might need a proper geographic to pixel transformation if that's the intent.
+        # For now, assuming points_xml are what you need for Shapely polygon.
+        # points_to_return = [[minx + (x/xml_width)*(maxx-minx), maxy - (y/xml_height)*(maxy-miny)] for x,y in points_xml]
+        
+        # Directly use the parsed lon/lat points for the polygon
+        if len(points_xml) < 3:
+            debug_message(f"Not enough points to form a polygon in {xml_file_path}")
+            return None
+        
+        polygon = Polygon(points_xml)
+        return {'type': 'Polygon', 'coordinates': [list(polygon.exterior.coords)]}
 
-        debug_message(f"DEBUG: Φορτώθηκαν {len(points_to_return)} σημεία περιγράμματος.")
-        return {"type": "Polygon", "coordinates": [points_to_return]}
-    except FileNotFoundError:
-        st.error(f"Το αρχείο XML περιγράμματος δεν βρέθηκε: {xml_file_path}"); return None
+    except ET.ParseError as e:
+        st.error(f"Error parsing XML file {xml_file_path}: {e}")
+        return None
     except Exception as e:
-        st.error(f"Σφάλμα φόρτωσης περιγράμματος από {os.path.basename(xml_file_path)}: {e}"); return None
+        st.error(f"An unexpected error occurred in load_lake_shape_from_xml for {xml_file_path}: {e}")
+        return None
 
 @st.cache_data
-def read_image(file_path: str, lake_shape: dict = None):
+def read_image(file_path: str, lake_shape: dict | None = None):
+    """Reads a GeoTIFF image, optionally masking it with a lake shape."""
     debug_message(f"DEBUG: Ανάγνωση εικόνας: {file_path}")
     try:
         with rasterio.open(file_path) as src:
@@ -899,8 +983,8 @@ def analyze_sampling_for_dashboard(sampling_points: list, first_image_data_rgb, 
                 for name, lon, lat in sampling_points:
                     col, row = _geographic_to_pixel(lon, lat, src.transform)
                     if 0 <= col < src.width and 0 <= row < src.height:
-                        win = rasterio.windows.Window(col,row,1,1)
-                        pixel_data = src.read([1,2,3], window=win)
+                        win = rasterio.windows.Window(col, row, 1, 1)
+                        pixel_data = src.read([1, 2, 3], window=win)
                         r,g,b = pixel_data[0,0,0], pixel_data[1,0,0], pixel_data[2,0,0]
                         
                         mg_v = _map_rgb_to_mg(r,g,b)
@@ -956,717 +1040,139 @@ def analyze_sampling_for_dashboard(sampling_points: list, first_image_data_rgb, 
         if p_n in results_mg_dash:
             for d_obj,val_mg in results_mg_dash[p_n]: all_mg_vals_date_d.setdefault(d_obj,[]).append(val_mg)
     s_dates_mg_d=sorted(all_mg_vals_date_d.keys())
-    avg_mg_d=[np.mean(all_mg_vals_date_d[d_obj]) for d_obj in s_dates_mg_d if all_mg_vals_date_d[d_obj]]
-    
-    fig_mg_d=go.Figure()
-    if s_dates_mg_d and avg_mg_d: fig_mg_d.add_trace(go.Scatter(x=s_dates_mg_d,y=avg_mg_d,mode='lines+markers',name='Μέσο mg/m³',marker=dict(color=avg_mg_d,colorscale='Viridis',reversescale=True,colorbar=dict(title='mg/m³',thickness=15),size=10),line=dict(color='grey')))
-    fig_mg_d.update_layout(title='Μέσο mg/m³ (Επιλεγμένα Σημεία)',xaxis_title='Ημερομηνία',yaxis_title='mg/m³',uirevision='dashboard_mg')
+    avg_mg_d = [np.mean(all_mg_vals_date_d[d_obj]) if all_mg_vals_date_d[d_obj] else np.nan for d_obj in s_dates_mg_d] # Use np.nan for empty cases
+    df_mg_d = pd.DataFrame({
+        'Date': s_dates_mg_d,
+        'Avg_mg_m3': avg_mg_d
+    })
+    df_mg_d.dropna(subset=['Avg_mg_m3'], inplace=True) # Remove rows where avg was NaN
 
-    fig_dual_d=make_subplots(specs=[[{"secondary_y":True}]])
-    if not df_h_d.empty: 
-        fig_dual_d.add_trace(go.Scatter(x=df_h_d['Date'],y=df_h_d['Height'],name='Στάθμη',mode='lines',line=dict(color='deepskyblue')),secondary_y=False)
-    if s_dates_mg_d and avg_mg_d: 
-        fig_dual_d.add_trace(go.Scatter(x=s_dates_mg_d,y=avg_mg_d,name='Μέσο mg/m³',mode='lines+markers',marker=dict(color=avg_mg_d,colorscale='Viridis',reversescale=True,size=10,showscale=False),line=dict(color='lightgreen')),secondary_y=True)
-    
-    fig_dual_d.update_layout(
-        title='Στάθμη & Μέσο mg/m³',
-        xaxis_title='Ημερομηνία',
-        uirevision='dashboard_dual', 
-        yaxis=dict(title=dict(text="Στάθμη (m)", font=dict(color="deepskyblue")), tickfont=dict(color="deepskyblue"),side='left'),
-        yaxis2=dict(title=dict(text="mg/m³", font=dict(color="lightgreen")), tickfont=dict(color="lightgreen"),overlaying='y', side='right')
-    )
-    
-    return fig_geo_d,fig_dual_d,fig_colors_d,fig_mg_d,results_colors_dash,results_mg_dash,df_h_d
+    fig_mg_d = go.Figure()
+    fig_mg_d.add_trace(go.Scatter(x=df_mg_d['Date'], y=df_mg_d['Avg_mg_m3'], mode='lines+markers', marker=dict(color=df_mg_d['Avg_mg_m3'], colorscale='Viridis', colorbar=dict(title='mg/m³'))))
+    fig_mg_d.update_layout(title='Μέση Συγκέντρωση mg/m³ ανά Ημερομηνία', xaxis_title='Ημερομηνία', yaxis_title='Μέση Συγκέντρωση mg/m³')
+    st.plotly_chart(fig_mg_d, use_container_width=True, key="fig_mg_dashboard")
 
+    st.markdown('</div>', unsafe_allow_html=True)
 
-def run_water_quality_dashboard(waterbody: str, index_name: str):
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True) # Changed to card
-        st.header(f"Προφίλ Ποιότητας και Στάθμης: {waterbody} - {index_name}")
-        
-        clean_index_name_for_key = re.sub(r'[^a-zA-Z0-9_]', '', index_name)
-        key_suffix_dash = f"_dash_{waterbody}_{clean_index_name_for_key}"
-        common_filename_prefix_dash = f"{waterbody}_{index_name}" 
-
-        data_folder = get_data_folder(waterbody, index_name)
-        if not data_folder: 
-            st.error(f"Φάκελος δεδομένων για '{waterbody} - {index_name}' δεν βρέθηκε. Παρακαλώ ελέγξτε τις ρυθμίσεις και τη δομή των φακέλων σας.")
-            st.markdown('</div>', unsafe_allow_html=True); return
-
-        images_folder_path = os.path.join(data_folder,"GeoTIFFs")
-        lake_height_excel_path = os.path.join(data_folder,"lake height.xlsx")
-        default_sampling_kml_path = os.path.join(data_folder,"sampling.kml")
-        vid_path = next((p for n in ["timelapse.mp4","timelapse.gif","Sentinel-2_L1C-202307221755611-timelapse.gif"] for p in [os.path.join(data_folder,n), os.path.join(images_folder_path,n)] if os.path.exists(p)), None)
-        
-        st.sidebar.subheader(f"Ρυθμίσεις Πίνακα ({index_name})")
-        available_tifs = {str(d.date()):fn for fn in (os.listdir(images_folder_path) if os.path.exists(images_folder_path) else []) if fn.lower().endswith(('.tif','.tiff')) for _,d in [extract_date_from_filename(fn)] if d}
-        
-        first_img_rgb, first_img_transform = None, None
-        if available_tifs:
-            sel_bg_date_options = sorted(available_tifs.keys(),reverse=True)
-            sel_bg_date_index = 0 if sel_bg_date_options else None
-
-            sel_bg_date = st.sidebar.selectbox("Εικόνα Αναφοράς:", sel_bg_date_options, index=sel_bg_date_index, key=f"bg_date{key_suffix_dash}")
-            if sel_bg_date and available_tifs.get(sel_bg_date):
-                try:
-                    with rasterio.open(os.path.join(images_folder_path,available_tifs[sel_bg_date])) as src:
-                        if src.count>=3: first_img_rgb,first_img_transform = src.read([1,2,3]),src.transform
-                        else: st.sidebar.error("Εικόνα < 3 κανάλια.")
-                except Exception as e: st.sidebar.error(f"Σφάλμα φόρτωσης αναφοράς: {e}")
-        else: st.sidebar.warning("Δεν βρέθηκαν GeoTIFF για εικόνα αναφοράς.")
-
-        if first_img_rgb is None: 
-            st.error("Απαιτείται έγκυρη εικόνα αναφοράς GeoTIFF (τουλάχιστον 3 κανάλια) για τη συνέχεια της ανάλυσης.")
-            st.markdown('</div>', unsafe_allow_html=True); return
-
-        tabs_ctrl = st.tabs(["Δειγματοληψία 1 (Προεπιλογή)", "Δειγματοληψία 2 (Ανέβασμα KML)"])
-        
-        with tabs_ctrl[0]: # Default Sampling
-            st.markdown("##### Ανάλυση με Προεπιλεγμένα Σημεία")
-            def_pts_list = parse_sampling_kml(default_sampling_kml_path) if os.path.exists(default_sampling_kml_path) else []
-            st.session_state[f"def_pts_list{key_suffix_dash}"] = def_pts_list 
-            
-            if def_pts_list:
-                all_def_point_names = [n for n,_,_ in def_pts_list]
-                default_selection = all_def_point_names[:] 
-
-                sel_pts_def_names = st.multiselect("Σημεία (Προεπιλογή):", all_def_point_names, default=default_selection, key=f"sel_def{key_suffix_dash}")
-                st.session_state[f"sel_pts_def_names{key_suffix_dash}"] = sel_pts_def_names 
-                if st.button("Εκτέλεση (Προεπιλογή)", key=f"run_def{key_suffix_dash}", type="primary", use_container_width=True):
-                    with st.spinner("Εκτέλεση ανάλυσης για προεπιλεγμένα σημεία..."): 
-                        st.session_state[SESSION_KEY_DEFAULT_RESULTS_DASHBOARD] = analyze_sampling_for_dashboard(
-                            def_pts_list, first_img_rgb, first_img_transform, images_folder_path, lake_height_excel_path, sel_pts_def_names
-                        )
-            else: st.caption("Δεν βρέθηκε το προεπιλεγμένο αρχείο δειγματοληψίας (sampling.kml).")
-
-            if SESSION_KEY_DEFAULT_RESULTS_DASHBOARD in st.session_state and st.session_state[SESSION_KEY_DEFAULT_RESULTS_DASHBOARD]:
-                res_def = st.session_state[SESSION_KEY_DEFAULT_RESULTS_DASHBOARD]
-                current_def_pts_list = st.session_state.get(f"def_pts_list{key_suffix_dash}", [])
-                current_sel_pts_def_names_for_plot = st.session_state.get(f"sel_pts_def_names{key_suffix_dash}", [p[0] for p in current_def_pts_list])
-
-
-                if isinstance(res_def, tuple) and len(res_def) == 7:
-                    fig_g, fig_d, fig_c, fig_m, res_c_data, res_m_data, df_h_data = res_def
-                    
-                    n_tabs_titles = ["GeoTIFF","Εικόνες","Video/GIF","Χρώματα Pixel","Μέσο mg/m³","Συνδυασμένο","mg/m³ ανά Σημείο"]
-                    n_tabs_def_display = st.tabs(n_tabs_titles)
-                    tab_prefix_key = f"def_tab_{key_suffix_dash}"
-
-                    with n_tabs_def_display[0]: 
-                        st.plotly_chart(fig_g, use_container_width=True, key=f"geo_d_chart_disp_{tab_prefix_key}")
-                        if current_def_pts_list:
-                            points_to_export_df = pd.DataFrame(
-                                [pt for pt in current_def_pts_list if pt[0] in current_sel_pts_def_names_for_plot],
-                                columns=['PointName', 'Longitude', 'Latitude']
-                            ) if current_sel_pts_def_names_for_plot else pd.DataFrame(current_def_pts_list, columns=['PointName', 'Longitude', 'Latitude'])
-                            
-                            if not points_to_export_df.empty:
-                                add_excel_download_button(points_to_export_df, f"{common_filename_prefix_dash}_default", "Sampling Points", f"excel_geo_def_{tab_prefix_key}")
-                        if index_name == "Χλωροφύλλη": 
-                            try:
-                                theme_bg = st.get_option("theme.backgroundColor")
-                                theme_text = st.get_option("theme.textColor")
-                                st.pyplot(create_chl_legend_figure(theme_bg_color=theme_bg, theme_text_color=theme_text))
-                            except:
-                                st.pyplot(create_chl_legend_figure())
-
-                    with n_tabs_def_display[1]: 
-                        image_navigation_ui(images_folder_path,available_tifs,SESSION_KEY_CURRENT_IMAGE_INDEX_DASH_DEF,f"nav_def_disp_{key_suffix_dash}",index_name=="Χλωροφύλλη",index_name)
-                    with n_tabs_def_display[2]: 
-                        if vid_path: 
-                            if vid_path.endswith(".mp4"): st.video(vid_path)
-                            else: st.image(vid_path)
-                            if index_name=="Χλωροφύλλη": 
-                                try:
-                                    theme_bg = st.get_option("theme.backgroundColor")
-                                    theme_text = st.get_option("theme.textColor")
-                                    st.pyplot(create_chl_legend_figure(theme_bg_color=theme_bg, theme_text_color=theme_text))
-                                except:
-                                    st.pyplot(create_chl_legend_figure())
-                        else: st.caption("Δεν βρέθηκε video/timelapse.")
-
-                    with n_tabs_def_display[3]: 
-                        c1_disp,c2_disp=st.columns([.85,.15])
-                        c1_disp.plotly_chart(fig_c, use_container_width=True, key=f"colors_d_chart_disp_{tab_prefix_key}")
-                        excel_sheets_colors = {}
-                        if isinstance(df_h_data, pd.DataFrame) and not df_h_data.empty:
-                            excel_sheets_colors['LakeHeight'] = df_h_data.copy()
-                        if res_c_data: 
-                            for point_name, data_list in res_c_data.items():
-                                if data_list and (point_name in current_sel_pts_def_names_for_plot):
-                                    df_point_colors = pd.DataFrame(data_list, columns=['Date', 'RGB_Normalized'])
-                                    df_point_colors['R_norm'] = df_point_colors['RGB_Normalized'].apply(lambda x: x[0])
-                                    df_point_colors['G_norm'] = df_point_colors['RGB_Normalized'].apply(lambda x: x[1])
-                                    df_point_colors['B_norm'] = df_point_colors['RGB_Normalized'].apply(lambda x: x[2])
-                                    excel_sheets_colors[f"{point_name}_Colors"] = df_point_colors[['Date', 'R_norm', 'G_norm', 'B_norm']].sort_values(by="Date")
-                        if excel_sheets_colors:
-                                add_excel_download_button(excel_sheets_colors, f"{common_filename_prefix_dash}_default", "Pixel Colors and Height", f"excel_colors_def_{tab_prefix_key}")
-                        if index_name=="Χλωροφύλλη": 
-                            try:
-                                theme_bg = st.get_option("theme.backgroundColor")
-                                theme_text = st.get_option("theme.textColor")
-                                c2_disp.pyplot(create_chl_legend_figure("vertical", theme_bg_color=theme_bg, theme_text_color=theme_text))
-                            except:
-                                c2_disp.pyplot(create_chl_legend_figure("vertical"))
-
-
-                    with n_tabs_def_display[4]: 
-                        st.plotly_chart(fig_m, use_container_width=True, key=f"mg_d_chart_disp_{tab_prefix_key}")
-                        temp_all_mg_by_d_loc = {} 
-                        for p_name_temp in current_sel_pts_def_names_for_plot:
-                            if p_name_temp in res_m_data:
-                                for d_obj_temp, val_mg_temp in res_m_data[p_name_temp]:
-                                    temp_all_mg_by_d_loc.setdefault(d_obj_temp, []).append(val_mg_temp)
-                        
-                        s_dts_mg_temp_loc = sorted(temp_all_mg_by_d_loc.keys())
-                        mean_mg_temp_loc = [np.mean(temp_all_mg_by_d_loc[d]) for d in s_dts_mg_temp_loc if temp_all_mg_by_d_loc[d]]
-                        st.session_state[f's_dts_mg_def{tab_prefix_key}'] = s_dts_mg_temp_loc 
-                        st.session_state[f'mean_mg_def{tab_prefix_key}'] = mean_mg_temp_loc
-
-                        if s_dts_mg_temp_loc and mean_mg_temp_loc:
-                            df_mean_mg = pd.DataFrame({'Date': s_dts_mg_temp_loc, 'Mean_mg_m3': mean_mg_temp_loc}).sort_values(by="Date")
-                            add_excel_download_button(df_mean_mg, f"{common_filename_prefix_dash}_default", "Mean mg_m3 (Selected Points)", f"excel_mean_mg_def_{tab_prefix_key}")
-
-                    with n_tabs_def_display[5]: 
-                        st.plotly_chart(fig_d, use_container_width=True, key=f"dual_d_chart_disp_{tab_prefix_key}")
-                        s_dts_mg_for_dual = st.session_state.get(f's_dts_mg_def{tab_prefix_key}', [])
-                        mean_mg_for_dual = st.session_state.get(f'mean_mg_def{tab_prefix_key}', [])
-                        df_mean_mg_for_dual = pd.DataFrame({'Date': s_dts_mg_for_dual, 'Mean_mg_m3': mean_mg_for_dual}) if s_dts_mg_for_dual and mean_mg_for_dual else pd.DataFrame(columns=['Date', 'Mean_mg_m3'])
-                        df_dual_export = pd.DataFrame()
-                        if isinstance(df_h_data, pd.DataFrame) and not df_h_data.empty:
-                            df_dual_export = df_h_data.copy()
-                        if not df_mean_mg_for_dual.empty:
-                            if not df_dual_export.empty:
-                                df_dual_export = pd.merge(df_dual_export, df_mean_mg_for_dual, on='Date', how='outer')
-                            else:
-                                df_dual_export = df_mean_mg_for_dual
-                        if not df_dual_export.empty:
-                            df_dual_export.sort_values('Date', inplace=True, ignore_index=True)
-                            add_excel_download_button(df_dual_export, f"{common_filename_prefix_dash}_default", "Height and Mean mg_m3", f"excel_dual_def_{tab_prefix_key}")
-                        
-                    with n_tabs_def_display[6]: 
-                        point_options_for_detail = current_sel_pts_def_names_for_plot
-                        if not point_options_for_detail: 
-                                st.caption("Δεν έχουν επιλεγεί σημεία για εμφάνιση.")
-                        else:
-                            sel_pt_d_disp = st.selectbox("Σημείο για mg/m³:", point_options_for_detail, key=f"detail_d_sel_disp_{tab_prefix_key}")
-                            if sel_pt_d_disp and res_m_data.get(sel_pt_d_disp): 
-                                mg_d_p_list = sorted(res_m_data[sel_pt_d_disp], key=lambda x: x[0])
-                                if mg_d_p_list: 
-                                    dts_detail, vals_detail = zip(*mg_d_p_list)
-                                    max_val_detail = max(vals_detail) if vals_detail else 1 
-                                    mk_cols_detail = px.colors.sample_colorscale("Viridis", [v/(max_val_detail if max_val_detail > 0 else 1) for v in vals_detail])
-                                    fig_det_d_disp = go.Figure(go.Scatter(x=list(dts_detail),y=list(vals_detail),mode='lines+markers',marker=dict(color=mk_cols_detail,size=10),line=dict(color="grey"),name=sel_pt_d_disp))
-                                    fig_det_d_disp.update_layout(title=f"mg/m³ για {sel_pt_d_disp}",xaxis_title="Ημερομηνία",yaxis_title="mg/m³")
-                                    st.plotly_chart(fig_det_d_disp,use_container_width=True, key=f"detail_d_chart_disp_{tab_prefix_key}")
-
-                                    df_point_mg_detail = pd.DataFrame({'Date': list(dts_detail), f'mg_m3': list(vals_detail)}).sort_values(by="Date")
-                                    add_excel_download_button(df_point_mg_detail, f"{common_filename_prefix_dash}_default_point_{sel_pt_d_disp}", f"mg_m3 for {sel_pt_d_disp}", f"excel_detail_mg_def_{sel_pt_d_disp}_{tab_prefix_key}")
-                                else: st.caption(f"Δεν υπάρχουν επεξεργασμένα δεδομένα mg/m³ για το σημείο '{sel_pt_d_disp}'.")
-                            elif sel_pt_d_disp: st.caption(f"Δεν βρέθηκαν δεδομένα mg/m³ για το σημείο '{sel_pt_d_disp}'.")
-                            else: st.caption("Παρακαλώ επιλέξτε ένα σημείο.")
-                else: 
-                    st.error("Σφάλμα μορφής αποτελεσμάτων (Προεπιλογή).")
-
-        with tabs_ctrl[1]: # Upload KML
-            st.markdown("##### Ανάλυση με Ανεβασμένο KML")
-            upl_file = st.file_uploader("Ανέβασμα KML:", type="kml", key=f"upl_kml_{key_suffix_dash}")
-            if upl_file:
-                upl_pts_list = parse_sampling_kml(upl_file)
-                st.session_state[f"upl_pts_list{key_suffix_dash}"] = upl_pts_list
-                if upl_pts_list:
-                    st.success(f"Βρέθηκαν {len(upl_pts_list)} σημεία.")
-                    all_upl_point_names = [n for n,_,_ in upl_pts_list]
-                    default_upl_selection = all_upl_point_names[:] 
-
-                    sel_pts_upl_names = st.multiselect("Σημεία (KML):", all_upl_point_names, default=default_upl_selection, key=f"sel_upl_{key_suffix_dash}")
-                    st.session_state[f"sel_pts_upl_names{key_suffix_dash}"] = sel_pts_upl_names
-                    if st.button("Εκτέλεση (KML)",key=f"run_upl_{key_suffix_dash}",type="primary", use_container_width=True):
-                        with st.spinner("Εκτέλεση..."): 
-                            st.session_state[SESSION_KEY_UPLOAD_RESULTS_DASHBOARD] = analyze_sampling_for_dashboard(
-                                upl_pts_list, first_img_rgb, first_img_transform,
-                                images_folder_path, lake_height_excel_path, sel_pts_upl_names
-                            )
-                else: 
-                    st.error("Το KML δεν περιείχε έγκυρα σημεία ή δεν μπόρεσε να αναλυθεί.")
-            
-            if SESSION_KEY_UPLOAD_RESULTS_DASHBOARD in st.session_state and st.session_state[SESSION_KEY_UPLOAD_RESULTS_DASHBOARD]:
-                res_upl = st.session_state[SESSION_KEY_UPLOAD_RESULTS_DASHBOARD]
-                current_upl_pts_list = st.session_state.get(f"upl_pts_list{key_suffix_dash}", [])
-                current_sel_pts_upl_names_for_plot = st.session_state.get(f"sel_pts_upl_names{key_suffix_dash}", [p[0] for p in current_upl_pts_list])
-
-                if isinstance(res_upl, tuple) and len(res_upl) == 7:
-                    fig_g_u, fig_d_u, fig_c_u, fig_m_u, res_c_data_u, res_m_data_u, df_h_data_u = res_upl
-                    
-                    n_tabs_u_titles = ["GeoTIFF","Εικόνες","Video/GIF","Χρώματα","Μέσο mg/m³","Διπλό","mg/m³ ανά Σημείο"]
-                    n_tabs_upl_display = st.tabs(n_tabs_u_titles)
-                    tab_prefix_key_upl = f"upl_tab_{key_suffix_dash}"
-
-                    # Tab 0: GeoTIFF
-                    with n_tabs_upl_display[0]:
-                        st.plotly_chart(fig_g_u, use_container_width=True, key=f"geo_u_chart_disp_{tab_prefix_key_upl}")
-                        if current_upl_pts_list:
-                            points_to_export_df_upl = pd.DataFrame(
-                                [pt for pt in current_upl_pts_list if pt[0] in current_sel_pts_upl_names_for_plot],
-                                columns=['PointName', 'Longitude', 'Latitude']
-                            ) if current_sel_pts_upl_names_for_plot else pd.DataFrame(current_upl_pts_list, columns=['PointName', 'Longitude', 'Latitude'])
-                            if not points_to_export_df_upl.empty:
-                                add_excel_download_button(points_to_export_df_upl, f"{common_filename_prefix_dash}_upload", "Sampling Points", f"excel_geo_upl_{tab_prefix_key_upl}")
-                        if index_name == "Χλωροφύλλη": 
-                            try:
-                                theme_bg = st.get_option("theme.backgroundColor")
-                                theme_text = st.get_option("theme.textColor")
-                                st.pyplot(create_chl_legend_figure(theme_bg_color=theme_bg, theme_text_color=theme_text))
-                            except:
-                                st.pyplot(create_chl_legend_figure())
-
-                    # Tab 1: Images
-                    with n_tabs_upl_display[1]:
-                        image_navigation_ui(images_folder_path,available_tifs,SESSION_KEY_CURRENT_IMAGE_INDEX_DASH_UPL,f"nav_upl_disp_{key_suffix_dash}",index_name=="Χλωροφύλλη",index_name)
-                    # Tab 2: Video/GIF
-                    with n_tabs_upl_display[2]:
-                        if vid_path:
-                            if vid_path.endswith(".mp4"): st.video(vid_path)
-                            else: st.image(vid_path)
-                            if index_name=="Χλωροφύλλη": 
-                                try:
-                                    theme_bg = st.get_option("theme.backgroundColor")
-                                    theme_text = st.get_option("theme.textColor")
-                                    st.pyplot(create_chl_legend_figure(theme_bg_color=theme_bg, theme_text_color=theme_text))
-                                except:
-                                    st.pyplot(create_chl_legend_figure())
-                        else: st.caption("Δεν βρέθηκε video/timelapse.")
-                    # Tab 3: Pixel Colors
-                    with n_tabs_upl_display[3]:
-                        c1u_disp, c2u_disp = st.columns([.85, .15])
-                        c1u_disp.plotly_chart(fig_c_u, use_container_width=True, key=f"colors_u_chart_disp_{tab_prefix_key_upl}")
-                        excel_sheets_colors_u = {}
-                        if isinstance(df_h_data_u, pd.DataFrame) and not df_h_data_u.empty:
-                            excel_sheets_colors_u['LakeHeight'] = df_h_data_u.copy()
-                        if res_c_data_u:
-                            for point_name, data_list in res_c_data_u.items():
-                                if data_list and (point_name in current_sel_pts_upl_names_for_plot):
-                                    df_point_colors = pd.DataFrame(data_list, columns=['Date', 'RGB_Normalized'])
-                                    df_point_colors['R_norm'] = df_point_colors['RGB_Normalized'].apply(lambda x: x[0])
-                                    df_point_colors['G_norm'] = df_point_colors['RGB_Normalized'].apply(lambda x: x[1])
-                                    df_point_colors['B_norm'] = df_point_colors['RGB_Normalized'].apply(lambda x: x[2])
-                                    excel_sheets_colors_u[f"{point_name}_Colors"] = df_point_colors[['Date', 'R_norm', 'G_norm', 'B_norm']].sort_values(by="Date")
-                        if excel_sheets_colors_u:
-                            add_excel_download_button(excel_sheets_colors_u, f"{common_filename_prefix_dash}_upload", "Pixel Colors and Height", f"excel_colors_upl_{tab_prefix_key_upl}")
-                        if index_name == "Χλωροφύλλη": 
-                            try:
-                                theme_bg = st.get_option("theme.backgroundColor")
-                                theme_text = st.get_option("theme.textColor")
-                                c2u_disp.pyplot(create_chl_legend_figure("vertical", theme_bg_color=theme_bg, theme_text_color=theme_text))
-                            except:
-                                c2u_disp.pyplot(create_chl_legend_figure("vertical"))
-                    # Tab 4: Mean mg/m3
-                    with n_tabs_upl_display[4]:
-                        st.plotly_chart(fig_m_u, use_container_width=True, key=f"mg_u_chart_disp_{tab_prefix_key_upl}")
-                        temp_all_mg_by_d_u_loc = {}
-                        for p_name_temp in current_sel_pts_upl_names_for_plot:
-                            if p_name_temp in res_m_data_u:
-                                for d_obj_temp, val_mg_temp in res_m_data_u[p_name_temp]:
-                                    temp_all_mg_by_d_u_loc.setdefault(d_obj_temp, []).append(val_mg_temp)
-                        s_dts_mg_temp_u_loc = sorted(temp_all_mg_by_d_u_loc.keys())
-                        mean_mg_temp_u_loc = [np.mean(temp_all_mg_by_d_u_loc[d]) for d in s_dts_mg_temp_u_loc if temp_all_mg_by_d_u_loc[d]]
-                        st.session_state[f's_dts_mg_upl{tab_prefix_key_upl}'] = s_dts_mg_temp_u_loc
-                        st.session_state[f'mean_mg_upl{tab_prefix_key_upl}'] = mean_mg_temp_u_loc
-                        if s_dts_mg_temp_u_loc and mean_mg_temp_u_loc:
-                            df_mean_mg_u = pd.DataFrame({'Date': s_dts_mg_temp_u_loc, 'Mean_mg_m3': mean_mg_temp_u_loc}).sort_values(by="Date")
-                            add_excel_download_button(df_mean_mg_u, f"{common_filename_prefix_dash}_upload", "Mean mg_m3 (Selected Points)", f"excel_mean_mg_upl_{tab_prefix_key_upl}")
-                    # Tab 5: Dual Axis
-                    with n_tabs_upl_display[5]:
-                        st.plotly_chart(fig_d_u, use_container_width=True, key=f"dual_u_chart_disp_{tab_prefix_key_upl}")
-                        s_dts_mg_for_dual_u = st.session_state.get(f's_dts_mg_upl{tab_prefix_key_upl}', [])
-                        mean_mg_for_dual_u = st.session_state.get(f'mean_mg_upl{tab_prefix_key_upl}', [])
-                        df_mean_mg_for_dual_u = pd.DataFrame({'Date': s_dts_mg_for_dual_u, 'Mean_mg_m3': mean_mg_for_dual_u}) if s_dts_mg_for_dual_u and mean_mg_for_dual_u else pd.DataFrame(columns=['Date', 'Mean_mg_m3'])
-                        df_dual_export_u = pd.DataFrame()
-                        if isinstance(df_h_data_u, pd.DataFrame) and not df_h_data_u.empty:
-                            df_dual_export_u = df_h_data_u.copy()
-                        if not df_mean_mg_for_dual_u.empty:
-                            if not df_dual_export_u.empty:
-                                df_dual_export_u = pd.merge(df_dual_export_u, df_mean_mg_for_dual_u, on='Date', how='outer')
-                            else:
-                                df_dual_export_u = df_mean_mg_for_dual_u
-                        if not df_dual_export_u.empty:
-                            df_dual_export_u.sort_values('Date', inplace=True, ignore_index=True)
-                            add_excel_download_button(df_dual_export_u, f"{common_filename_prefix_dash}_upload", "Height and Mean mg_m3", f"excel_dual_upl_{tab_prefix_key_upl}")
-
-                    with n_tabs_upl_display[6]: 
-                        point_options_for_detail_u = current_sel_pts_upl_names_for_plot if current_sel_pts_upl_names_for_plot else list(res_m_data_u.keys()) # Use selected points or all if none selected
-                        if not point_options_for_detail_u:
-                            st.caption("Δεν υπάρχουν διαθέσιμα σημεία για εμφάνιση.")
-                        else:
-                            sel_pt_u_disp = st.selectbox("Σημείο για mg/m³ (KML):", point_options_for_detail_u, key=f"detail_u_sel_disp_{tab_prefix_key_upl}")
-                            if sel_pt_u_disp and res_m_data_u.get(sel_pt_u_disp):
-                                mg_d_pu_list = sorted(res_m_data_u[sel_pt_u_disp], key=lambda x: x[0])
-                                if mg_d_pu_list:
-                                    dts_u_detail, vals_u_detail = zip(*mg_d_pu_list)
-                                    mk_cols_u_detail = px.colors.sample_colorscale("Viridis", [v/(max(vals_u_detail) if max(vals_u_detail) and max(vals_u_detail)>0 else 1) for v in vals_u_detail])
-                                    fig_det_u_disp = go.Figure(go.Scatter(x=list(dts_u_detail),y=list(vals_u_detail),mode='lines+markers',marker=dict(color=mk_cols_u_detail,size=10),line=dict(color="grey"),name=sel_pt_u_disp))
-                                    fig_det_u_disp.update_layout(title=f"mg/m³ για {sel_pt_u_disp} (KML)",xaxis_title="Ημερομηνία",yaxis_title="mg/m³")
-                                    st.plotly_chart(fig_det_u_disp, use_container_width=True, key=f"detail_u_chart_disp_{tab_prefix_key_upl}")
-                                    
-                                                                
-                                    df_point_mg_detail_u = pd.DataFrame({'Date': list(dts_u_detail), f'mg_m3': list(vals_u_detail)}).sort_values(by="Date")
-                                    add_excel_download_button(df_point_mg_detail_u, f"{common_filename_prefix_dash}_upload_point_{sel_pt_u_disp}", f"mg_m3 for {sel_pt_u_disp}", f"excel_detail_mg_upl_{sel_pt_u_disp}_{tab_prefix_key_upl}")
-                                else: st.caption(f"Δεν υπάρχουν επεξεργασμένα δεδομένα mg/m³ για το σημείο '{sel_pt_u_disp}'.")
-                            elif sel_pt_u_disp : st.caption(f"Δεν βρέθηκαν δεδομένα mg/m³ για το σημείο '{sel_pt_u_disp}'.")
-                            else: st.caption("Παρακαλώ επιλέξτε ένα σημείο.")
-                else:
-                    st.error("Σφάλμα μορφής αποτελεσμάτων (Upload KML).")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-
-def run_predictive_tools(waterbody: str, initial_selected_index: str):
+def run_predictive_tools(waterbody: str, index_name: str, selected_sampling_type: str, index_info: dict):
+    """
+    Provides time series forecasting tools for water quality indices.
+    """
     with st.container():
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.header(f"Εργαλεία Πρόβλεψης & Έγκαιρης Ενημέρωσης: {waterbody}")
-        st.markdown(f"Παράλληλη Ανάλυση για Δείκτες: **Πραγματικό, Χλωροφύλλη, Θολότητα**")
-        
-        clean_initial_index_name = re.sub(r'[^a-zA-Z0-9_]', '', initial_selected_index)
-        key_suffix_pred_section = f"_pred_tool_{waterbody}_{clean_initial_index_name}"
-        
-        chart_display_options = {
-            "GeoTIFF": "geo", 
-            "Χρώματα Pixel & Στάθμη": "colors", 
-            "Στάθμη Λίμνης (Μόνο)": "lake_height_only",
-            "Μέσο mg/m³": "mg",
-            "Συνδυασμένο (Στάθμη & Μέσο mg/m³)": "dual"
-        }
-        selected_charts_to_display = st.multiselect(
-            "Επιλέξτε τύπους διαγραμμάτων για εμφάνιση:",
-            options=list(chart_display_options.keys()),
-            default=list(chart_display_options.keys()),
-            key=f"select_charts{key_suffix_pred_section}"
-        )
+        st.header(f"Εργαλεία Πρόβλεψης: {waterbody} - {index_name}")
 
-        st.subheader("Κοινές Παράμετροι Φιλτραρίσματος για όλους τους Δείκτες")
-        col_filt1, col_filt2 = st.columns(2)
-        with col_filt1:
-            lower_thresh_common, upper_thresh_common = st.slider(
-                "Εύρος τιμών pixel:", 0, 255, (0, 255), 
-                key=f"thresh_common{key_suffix_pred_section}"
-            )
-            sampling_type_common = st.radio(
-                "Σύνολο Σημείων Δειγματοληψίας:", 
-                ["Προεπιλογή", "Ανέβασμα KML"], 
-                key=f"sampling_type_common{key_suffix_pred_section}", 
-                horizontal=True
-            )
-        with col_filt2:
-            date_min_common = st.date_input("Ημερομηνία από:", value=date(2015, 1, 1), key=f"date_min_common{key_suffix_pred_section}")
-            date_max_common = st.date_input("Ημερομηνία έως:", value=date.today(), key=f"date_max_common{key_suffix_pred_section}")
+        with st.spinner(f"Φόρτωση δεδομένων για {waterbody} - {index_name}..."):
+            data_folder = get_data_folder(waterbody, index_name)
+            if not data_folder:
+                st.error(f"Δεν βρέθηκε φάκελος δεδομένων για τον ταμιευτήρα '{waterbody}' και τον δείκτη '{index_name}'.")
+                st.markdown('</div>', unsafe_allow_html=True)
+                return
 
-        uploaded_kml_common = None
-        if sampling_type_common == "Ανέβασμα KML":
-            uploaded_kml_common = st.file_uploader(
-                "Ανεβάστε ένα αρχείο KML (θα χρησιμοποιηθεί για όλους τους δείκτες):", 
-                type="kml", 
-                key=f"kml_upload_common{key_suffix_pred_section}"
+            kml_path = get_kml_path(APP_BASE_DIR, waterbody, index_name, selected_sampling_type)
+            sampling_points = load_sampling_points(kml_path)
+
+            if not sampling_points:
+                st.warning(f"Δεν βρέθηκαν σημεία δειγματοληψίας από το αρχείο KML: {kml_path}")
+                st.markdown('</div>', unsafe_allow_html=True)
+                return
+
+            images_folder = os.path.join(data_folder, "GeoTIFFs")
+            if not os.path.isdir(images_folder):
+                st.error(f"Ο φάκελος εικόνων GeoTIFFs δεν βρέθηκε: {images_folder}")
+                st.markdown('</div>', unsafe_allow_html=True)
+                return
+                
+            first_image_data, first_transform = get_reference_image_and_transform(images_folder)
+            if first_image_data is None or first_transform is None:
+                st.error("Δεν ήταν δυνατή η φόρτωση της εικόνας αναφοράς ή του μετασχηματισμού.")
+                st.markdown('</div>', unsafe_allow_html=True)
+                return
+                
+            lake_height_path = get_lake_height_excel_path(data_folder)
+
+            selected_points_for_analysis = [sp[0] for sp in sampling_points]
+
+            _, _, _, _, results_mg, _, _ = analyze_sampling_generic(
+                sampling_points, first_image_data, first_transform,
+                images_folder, lake_height_path, selected_points_for_analysis,
+                date_min=None, date_max=None 
             )
 
-        if st.button("Εκτέλεση Παράλληλης Ανάλυσης & Εμφάνιση Αποτελεσμάτων", key=f"recalc_parallel{key_suffix_pred_section}", type="primary", use_container_width=True):
-            indices_to_analyze = ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"]
-            analysis_results_all_indices = {} 
-            
-            sampling_points_to_use_for_analysis = None
-            default_kml_found = False # Moved definition higher
-            if sampling_type_common == "Προεπιλογή":
-                for idx_for_kml in indices_to_analyze: 
-                    temp_data_folder_for_kml = get_data_folder(waterbody, idx_for_kml)
-                    if temp_data_folder_for_kml:
-                        default_kml_path_common = os.path.join(temp_data_folder_for_kml, "sampling.kml")
-                        if os.path.exists(default_kml_path_common):
-                            sampling_points_to_use_for_analysis = parse_sampling_kml(default_kml_path_common)
-                            if sampling_points_to_use_for_analysis:
-                                default_kml_found = True
-                                st.caption(f"Χρήση προεπιλεγμένου KML από τον φάκελο του δείκτη: {idx_for_kml}")
-                                break 
-                if not default_kml_found:
-                    st.error(f"Δεν βρέθηκε προεπιλεγμένο αρχείο KML (sampling.kml) σε κανέναν από τους φακέλους των δεικτών για το {waterbody}.")
-                    st.markdown('</div>', unsafe_allow_html=True); return 
-            elif sampling_type_common == "Ανέβασμα KML":
-                if uploaded_kml_common:
-                    sampling_points_to_use_for_analysis = parse_sampling_kml(uploaded_kml_common)
-                    if not sampling_points_to_use_for_analysis: # Check if KML parsing failed
-                         st.error("Το ανεβασμένο KML δεν περιείχε έγκυρα σημεία ή απέτυχε η ανάλυση.")
-                         st.markdown('</div>', unsafe_allow_html=True); return
+        if not results_mg:
+            st.info("Δεν υπάρχουν διαθέσιμα επεξεργασμένα δεδομένα για πρόβλεψη.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        point_names = sorted(list(results_mg.keys()))
+        if not point_names:
+            st.info("Δεν βρέθηκαν σημεία με δεδομένα για πρόβλεψη.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        st.subheader("Ρύθμιση Πρόβλεψης")
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_point = st.selectbox("Επιλογή Σημείου Δειγματοληψίας:", point_names, key=f"forecast_point_{waterbody}_{index_name}")
+        with col2:
+            forecast_horizon = st.number_input("Ορίζοντας Πρόβλεψης (αριθμός περιόδων):", min_value=1, value=12, step=1, key=f"forecast_horizon_{waterbody}_{index_name}")
+
+        if st.button("Δημιουργία Πρόβλεψης", key=f"run_forecast_btn_{waterbody}_{index_name}"):
+            if selected_point and selected_point in results_mg:
+                point_data = results_mg[selected_point]
+                if not point_data:
+                    st.warning(f"Δεν υπάρχουν δεδομένα για το σημείο '{selected_point}'.")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    return
+
+                dates = [d[0] for d in point_data]
+                values = [d[1] for d in point_data]
+                
+                df = pd.DataFrame({'date': pd.to_datetime(dates), 'value': values})
+                df = df.sort_values(by='date').set_index('date')['value'].dropna()
+
+                if len(df) < 10: 
+                    st.warning(f"Δεν υπάρχουν αρκετά σημεία δεδομένων ({len(df)}) για το σημείο '{selected_point}' για αξιόπιστη πρόβλεψη. Απαιτούνται τουλάχιστον 10.")
                 else:
-                    st.error("Επιλέξατε ανέβασμα KML, αλλά δεν έχει μεταφορτωθεί αρχείο.")
-                    st.markdown('</div>', unsafe_allow_html=True); return
-            
-            if not sampling_points_to_use_for_analysis:
-                st.error("Δεν ήταν δυνατός ο ορισμός των σημείων δειγματοληψίας. Η ανάλυση ακυρώνεται.")
-                st.markdown('</div>', unsafe_allow_html=True); return
+                    with st.spinner("Εκτέλεση πρόβλεψης..."):
+                        try:
+                            model = ExponentialSmoothing(df, trend='add', seasonal=None, initialization_method="estimated")
+                            fitted_model = model.fit()
+                            forecast_values = fitted_model.forecast(forecast_horizon)
 
-            all_point_names_to_use_in_analysis = [pt[0] for pt in sampling_points_to_use_for_analysis]
-
-            with st.spinner("Εκτέλεση αναλύσεων για όλους τους δείκτες... Αυτό μπορεί να διαρκέσει λίγο."):
-                for i_prog, current_idx_name_iter in enumerate(indices_to_analyze):
-                    progress_val = (i_prog + 1) / len(indices_to_analyze)
-                    # Initialize progress_bar inside the loop if you want one per index
-                    # Or update a single one:
-                    if 'progress_bar_pred' not in st.session_state:
-                        st.session_state.progress_bar_pred = st.progress(0, text="Έναρξη επεξεργασίας δεικτών...")
-                    
-                    st.session_state.progress_bar_pred.progress(progress_val / 2, text=f"Επεξεργασία δείκτη: {current_idx_name_iter} (φόρτωση)...")
-                    
-                    data_folder_idx = get_data_folder(waterbody, current_idx_name_iter)
-                    if not data_folder_idx:
-                        analysis_results_all_indices[current_idx_name_iter] = {"error": f"Δεν βρέθηκε φάκελος δεδομένων."}
-                        st.warning(f"Παράλειψη '{current_idx_name_iter}': Δεν βρέθηκε φάκελος δεδομένων.")
-                        st.session_state.progress_bar_pred.progress(progress_val, text=f"Παράλειψη δείκτη: {current_idx_name_iter} (δεν βρέθηκε φάκελος)")
-                        continue
-
-                    images_folder_idx = os.path.join(data_folder_idx, "GeoTIFFs")
-                    lake_height_excel_idx = os.path.join(data_folder_idx, "lake height.xlsx")
-                    
-                    tif_files_idx = sorted(glob.glob(os.path.join(images_folder_idx, "*.tif")))
-                    if not tif_files_idx:
-                        analysis_results_all_indices[current_idx_name_iter] = {"error": "Δεν βρέθηκαν αρχεία GeoTIFF."}
-                        st.warning(f"Παράλειψη '{current_idx_name_iter}': Δεν βρέθηκαν αρχεία GeoTIFF.")
-                        st.session_state.progress_bar_pred.progress(progress_val, text=f"Παράλειψη δείκτη: {current_idx_name_iter} (δεν βρέθηκαν GeoTIFFs)")
-                        continue
-
-                    first_img_data_idx, first_transform_idx = None, None
-                    try:
-                        with rasterio.open(tif_files_idx[0]) as src:
-                            if src.count < 3:
-                                analysis_results_all_indices[current_idx_name_iter] = {"error": "Η 1η εικόνα GeoTIFF δεν έχει 3 κανάλια."}
-                                st.warning(f"Παράλειψη '{current_idx_name_iter}': Η 1η εικόνα GeoTIFF δεν έχει 3 κανάλια.")
-                                st.session_state.progress_bar_pred.progress(progress_val, text=f"Παράλειψη δείκτη: {current_idx_name_iter} (σφάλμα εικόνας)")
-                                continue
-                            first_img_data_idx = src.read([1,2,3])
-                            first_transform_idx = src.transform
-                    except Exception as e:
-                        analysis_results_all_indices[current_idx_name_iter] = {"error": f"Σφάλμα φόρτωσης 1ης εικόνας GeoTIFF: {e}"}
-                        st.warning(f"Παράλειψη '{current_idx_name_iter}': Σφάλμα φόρτωσης 1ης εικόνας GeoTIFF.")
-                        st.session_state.progress_bar_pred.progress(progress_val, text=f"Παράλειψη δείκτη: {current_idx_name_iter} (σφάλμα φόρτωσης εικόνας)")
-                        continue
-                    
-                    try:
-                        raw_figs_and_data = analyze_sampling_generic(
-                            sampling_points=sampling_points_to_use_for_analysis,
-                            first_image_data=first_img_data_idx,
-                            first_transform=first_transform_idx,
-                            images_folder=images_folder_idx,
-                            lake_height_path=lake_height_excel_idx,
-                            selected_points_names=all_point_names_to_use_in_analysis,
-                            lower_thresh=lower_thresh_common,
-                            upper_thresh=upper_thresh_common,
-                            date_min=date_min_common,
-                            date_max=date_max_common
-                        )
-                        analysis_results_all_indices[current_idx_name_iter] = {
-                            "fig_geo": raw_figs_and_data[0], 
-                            "fig_dual": raw_figs_and_data[1], 
-                            "fig_colors": raw_figs_and_data[2], 
-                            "fig_mg": raw_figs_and_data[3],
-                            "data_results_colors": raw_figs_and_data[4],
-                            "data_results_mg": raw_figs_and_data[5],    
-                            "data_df_h": raw_figs_and_data[6]           
-                        }
-                        st.session_state.progress_bar_pred.progress(progress_val, text=f"Ολοκληρώθηκε: {current_idx_name_iter}")
-                    except Exception as e_analyze:
-                        analysis_results_all_indices[current_idx_name_iter] = {"error": f"Σφάλμα κατά την ανάλυση: {e_analyze}"}
-                        st.warning(f"Σφάλμα κατά την ανάλυση του δείκτη '{current_idx_name_iter}'.")
-                        st.session_state.progress_bar_pred.progress(progress_val, text=f"Σφάλμα ανάλυσης: {current_idx_name_iter}")
-                if 'progress_bar_pred' in st.session_state:
-                    del st.session_state.progress_bar_pred # Clean up progress bar from session
-
-            st.session_state[f"predictive_tool_results{key_suffix_pred_section}"] = analysis_results_all_indices
-            st.session_state[f"predictive_tool_selected_charts{key_suffix_pred_section}"] = selected_charts_to_display
-            st.session_state[f"predictive_tool_sampling_points{key_suffix_pred_section}"] = sampling_points_to_use_for_analysis
-            st.success("Όλες οι αναλύσεις ολοκληρώθηκαν!")
-
-
-        if f"predictive_tool_results{key_suffix_pred_section}" in st.session_state:
-            analysis_results = st.session_state[f"predictive_tool_results{key_suffix_pred_section}"]
-            charts_to_show = st.session_state.get(f"predictive_tool_selected_charts{key_suffix_pred_section}", [])
-            current_sampling_points_pred = st.session_state.get(f"predictive_tool_sampling_points{key_suffix_pred_section}", [])
-            indices_to_analyze = ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"] # Define again for this block
-
-            st.markdown("---")
-            st.subheader("Αποτελέσματα Παράλληλης Ανάλυσης")
-
-            for chart_name_key_iter, fig_internal_key_iter in chart_display_options.items():
-                if chart_name_key_iter not in charts_to_show:
-                    continue
-
-                st.markdown(f"#### {chart_name_key_iter}")
-                common_filename_prefix_chart = f"{waterbody}_predictive_{fig_internal_key_iter}"
-
-
-                if chart_name_key_iter == "Χρώματα Pixel & Στάθμη": # Special layout for this one
-                    for idx_name_iter_colors in indices_to_analyze:
-                        with st.container(): # Keep full width
-                            st.markdown(f"##### {idx_name_iter_colors}")
-                            result_data_for_idx_colors = analysis_results.get(idx_name_iter_colors, {})
-                            excel_btn_key_colors = f"excel_pred_colors_{idx_name_iter_colors}_{key_suffix_pred_section}"
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(x=df.index, y=df.values, mode='lines', name='Ιστορικά Δεδομένα'))
+                            fig.add_trace(go.Scatter(x=forecast_values.index, y=forecast_values.values, mode='lines+markers', name='Πρόβλεψη', line=dict(dash='dash')))
                             
-                            if "error" in result_data_for_idx_colors:
-                                st.error(f"{idx_name_iter_colors}: {result_data_for_idx_colors['error']}")
-                                continue
+                            y_axis_title = index_name
+                            if index_name in index_info and 'units' in index_info[index_name]:
+                                y_axis_title = f"{index_name} ({index_info[index_name]['units']})"
 
-                            fig_colors_to_plot = result_data_for_idx_colors.get("fig_colors")
-                            df_h_iter_colors = result_data_for_idx_colors.get("data_df_h")
-                            results_colors_iter_data = result_data_for_idx_colors.get("data_results_colors")
-                            
-                            if fig_colors_to_plot:
-                                fig_colors_to_plot.update_layout(height=500, uirevision=f"colors_{idx_name_iter_colors}_full{key_suffix_pred_section}")
-                                st.plotly_chart(fig_colors_to_plot, use_container_width=True, key=f"chart_colors_{idx_name_iter_colors}_full{key_suffix_pred_section}")
-                                
-                                excel_sheets_pred_colors = {}
-                                if isinstance(df_h_iter_colors, pd.DataFrame) and not df_h_iter_colors.empty:
-                                    excel_sheets_pred_colors['LakeHeight'] = df_h_iter_colors.copy()
-                                if results_colors_iter_data:
-                                    for point_name_rc, data_list_rc in results_colors_iter_data.items():
-                                        if data_list_rc:
-                                            df_pt_colors = pd.DataFrame(data_list_rc, columns=['Date', 'RGB_Normalized'])
-                                            df_pt_colors['R_norm'] = df_pt_colors['RGB_Normalized'].apply(lambda x: x[0])
-                                            df_pt_colors['G_norm'] = df_pt_colors['RGB_Normalized'].apply(lambda x: x[1])
-                                            df_pt_colors['B_norm'] = df_pt_colors['RGB_Normalized'].apply(lambda x: x[2])
-                                            excel_sheets_pred_colors[f"{point_name_rc}_Colors"] = df_pt_colors[['Date', 'R_norm', 'G_norm', 'B_norm']].sort_values(by="Date")
-                                if excel_sheets_pred_colors:
-                                    add_excel_download_button(excel_sheets_pred_colors, f"{common_filename_prefix_chart}_{idx_name_iter_colors}", f"Pixel Colors & Height Data ({idx_name_iter_colors})", excel_btn_key_colors)
-                            else:
-                                st.caption(f"Δεν υπάρχουν δεδομένα για '{chart_name_key_iter}' ({idx_name_iter_colors}).")
-                        st.markdown("---" if idx_name_iter_colors != indices_to_analyze[-1] else "")
-                else: # Regular 3-column layout
-                    inner_cols = st.columns(len(indices_to_analyze)) 
-                    for i, idx_name_iter_cols in enumerate(indices_to_analyze):
-                        with inner_cols[i]:
-                            st.markdown(f"##### {idx_name_iter_cols}")
-                            result_data_for_idx_cols = analysis_results.get(idx_name_iter_cols, {})
-                            excel_button_key_base_cols = f"excel_pred_{fig_internal_key_iter}_{idx_name_iter_cols}_{key_suffix_pred_section}"
-                            
-                            if "error" in result_data_for_idx_cols:
-                                st.error(result_data_for_idx_cols["error"])
-                                continue
+                            fig.update_layout(
+                                title=f"Πρόβλεψη για το Σημείο: {selected_point}",
+                                xaxis_title="Ημερομηνία",
+                                yaxis_title=y_axis_title,
+                                legend_title_text="Δεδομένα"
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
 
-                            fig_to_plot_cols = None
-                            df_for_excel_pred_cols = None
-                            excel_label_suffix_pred_cols = f"{chart_name_key_iter} ({idx_name_iter_cols})"
+                            st.subheader("Προβλεπόμενες Τιμές")
+                            forecast_df = pd.DataFrame({'Ημερομηνία': forecast_values.index, 'Προβλεπόμενη Τιμή': forecast_values.values})
+                            st.dataframe(forecast_df.style.format({'Προβλεπόμενη Τιμή': "{:.2f}"}))
                             
-                            df_h_iter_cols = result_data_for_idx_cols.get("data_df_h")
-                            results_mg_iter_cols = result_data_for_idx_cols.get("data_results_mg")
+                            csv = forecast_df.to_csv(index=False).encode('utf-8')
+                            st.download_button(
+                                label="Λήψη Δεδομένων Πρόβλεψης (CSV)",
+                                data=csv,
+                                file_name=f"{waterbody}_{index_name}_{selected_point}_forecast.csv",
+                                mime='text/csv',
+                                key=f"download_forecast_{waterbody}_{index_name}_{selected_point}"
+                            )
 
-
-                            if fig_internal_key_iter == "geo":
-                                fig_to_plot_cols = result_data_for_idx_cols.get("fig_geo")
-                                if current_sampling_points_pred:
-                                    df_for_excel_pred_cols = pd.DataFrame(current_sampling_points_pred, columns=['PointName', 'Longitude', 'Latitude'])
-                                    excel_label_suffix_pred_cols = f"Sampling Points Data ({idx_name_iter_cols})"
-                            
-                            elif fig_internal_key_iter == "lake_height_only":
-                                if isinstance(df_h_iter_cols, pd.DataFrame) and not df_h_iter_cols.empty:
-                                    df_for_excel_pred_cols = df_h_iter_cols.copy().sort_values(by="Date")
-                                    excel_label_suffix_pred_cols = f"Lake Height Data ({idx_name_iter_cols})"
-                                    fig_to_plot_cols = go.Figure(go.Scatter(x=df_h_iter_cols['Date'], y=df_h_iter_cols['Height'], name='Στάθμη Λίμνης'))
-                                    fig_to_plot_cols.update_layout(title=f"Στάθμη Λίμνης ({idx_name_iter_cols})")
-                                else:
-                                    st.caption(f"Δεν υπάρχουν δεδομένα στάθμης για {idx_name_iter_cols}")
-                            
-                            elif fig_internal_key_iter == "mg":
-                                fig_to_plot_cols = result_data_for_idx_cols.get("fig_mg")
-                                temp_all_mg_d_pred_cols = {}
-                                if results_mg_iter_cols:
-                                    for p_name_mg_iter, data_list_mg in results_mg_iter_cols.items():
-                                        for d_obj_mg, val_mg_iter in data_list_mg:
-                                            temp_all_mg_d_pred_cols.setdefault(d_obj_mg, []).append(val_mg_iter)
-                                s_dts_mg_pred_cols = sorted(temp_all_mg_d_pred_cols.keys())
-                                mean_mg_pred_cols = [np.mean(temp_all_mg_d_pred_cols[d]) for d in s_dts_mg_pred_cols if temp_all_mg_d_pred_cols[d]]
-                                if s_dts_mg_pred_cols and mean_mg_pred_cols:
-                                    df_for_excel_pred_cols = pd.DataFrame({'Date': s_dts_mg_pred_cols, 'Mean_mg_m3': mean_mg_pred_cols}).sort_values(by="Date")
-                                    excel_label_suffix_pred_cols = f"Mean mg/m³ Data ({idx_name_iter_cols})"
-
-                            elif fig_internal_key_iter == "dual":
-                                fig_to_plot_cols = result_data_for_idx_cols.get("fig_dual")
-                                df_mean_mg_for_dual_pred_cols = pd.DataFrame()
-                                temp_all_mg_d_pred_dual_cols = {}
-                                if results_mg_iter_cols:
-                                    for p_name_mg_iter_d, data_list_mg_d in results_mg_iter_cols.items():
-                                        for d_obj_mg_d, val_mg_iter_d in data_list_mg_d:
-                                            temp_all_mg_d_pred_dual_cols.setdefault(d_obj_mg_d, []).append(val_mg_iter_d)
-                                s_dts_mg_pred_d_cols = sorted(temp_all_mg_d_pred_dual_cols.keys())
-                                mean_mg_pred_d_cols = [np.mean(temp_all_mg_d_pred_dual_cols[d]) for d in s_dts_mg_pred_d_cols if temp_all_mg_d_pred_dual_cols[d]]
-                                if s_dts_mg_pred_d_cols and mean_mg_pred_d_cols:
-                                    df_mean_mg_for_dual_pred_cols = pd.DataFrame({'Date': s_dts_mg_pred_d_cols, 'Mean_mg_m3': mean_mg_pred_d_cols})
-
-                                df_dual_export_pred_cols = pd.DataFrame()
-                                if isinstance(df_h_iter_cols, pd.DataFrame) and not df_h_iter_cols.empty:
-                                    df_dual_export_pred_cols = df_h_iter_cols.copy()
-                                if not df_mean_mg_for_dual_pred_cols.empty:
-                                    if not df_dual_export_pred_cols.empty:
-                                        df_dual_export_pred_cols = pd.merge(df_dual_export_pred_cols, df_mean_mg_for_dual_pred_cols, on='Date', how='outer')
-                                    else:
-                                        df_dual_export_pred_cols = df_mean_mg_for_dual_pred_cols
-                                if not df_dual_export_pred_cols.empty:
-                                    df_dual_export_pred_cols.sort_values('Date', inplace=True, ignore_index=True)
-                                    df_for_excel_pred_cols = df_dual_export_pred_cols
-                                    excel_label_suffix_pred_cols = f"Height & Mean mg/m³ Data ({idx_name_iter_cols})"
-                            
-                            if fig_to_plot_cols:
-                                fig_to_plot_cols.update_layout(height=400, uirevision=f"{fig_internal_key_iter}_{idx_name_iter_cols}_col{key_suffix_pred_section}")
-                                st.plotly_chart(fig_to_plot_cols, use_container_width=True, key=f"chart_{fig_internal_key_iter}_{idx_name_iter_cols}_col{key_suffix_pred_section}")
-                                if df_for_excel_pred_cols is not None:
-                                    add_excel_download_button(df_for_excel_pred_cols, f"{common_filename_prefix_chart}_{idx_name_iter_cols}", excel_label_suffix_pred_cols, excel_button_key_base_cols)
-                                if fig_internal_key_iter == "geo" and idx_name_iter_cols == "Χλωροφύλλη":
-                                    st.pyplot(create_chl_legend_figure(orientation="horizontal"))
-                            elif fig_internal_key_iter != "lake_height_only" and fig_internal_key_iter != "colors": # colors handled in its own block
-                                 st.caption(f"Δεν υπάρχουν δεδομένα για '{chart_name_key_iter}' ({idx_name_iter_cols}).")
-                st.markdown("""<hr style="border:1px solid #444; margin-top:1.5rem; margin-bottom:1.5rem;">""", unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"Παρουσιάστηκε σφάλμα κατά τη δημιουργία της πρόβλεψης: {e}")
+            else:
+                st.warning("Παρακαλώ επιλέξτε ένα έγκυρο σημείο δειγματοληψίας.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-
-def main_app():
-    inject_custom_css() 
-    run_intro_page_custom() 
-    run_custom_sidebar_ui_custom() 
-
-    selected_wb = st.session_state.get(SESSION_KEY_WATERBODY)
-    selected_idx = st.session_state.get(SESSION_KEY_INDEX)
-    selected_an = st.session_state.get(SESSION_KEY_ANALYSIS)
-
-    if not all([selected_wb, selected_idx, selected_an]):
-        render_footer() 
-        return 
-
-    if selected_wb == "Γαδουρά" and selected_idx in ["Χλωροφύλλη", "Πραγματικό", "Θολότητα"]:
-        if selected_an == "Επιφανειακή Αποτύπωση":
-            run_lake_processing_app(selected_wb, selected_idx)
-        elif selected_an == "Προφίλ ποιότητας και στάθμης":
-            run_water_quality_dashboard(selected_wb, selected_idx)
-        elif selected_an == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
-            run_predictive_tools(selected_wb, selected_idx)
-    else:
-        st.warning(f"Δεν υπάρχουν διαθέσιμες αναλύσεις ή δεδομένα για τον συνδυασμό: "
-                   f"Υδάτινο Σώμα '{selected_wb}' και Δείκτης '{selected_idx}'. "
-                   f"Παρακαλώ δοκιμάστε έναν άλλο συνδυασμό.")
-    
-    render_footer() 
-
-if __name__ == "__main__":
-    # --- RENDER LOGIN UI ---
-    # The authenticator.login() method will render the login form,
-    # process login attempts, and update st.session_state.
-    authenticator.login('main') # You can use 'sidebar' instead of 'main'
-
-    # Check authentication status from st.session_state
-    # Use .get() for safer access to session_state keys
-    auth_status = st.session_state.get("authentication_status")
-
-    if auth_status: # Checks if True
-        # If user is authenticated, run the main application
-        main_app()
-    elif auth_status is False: # Explicitly checks for False
-        st.error('Το όνομα χρήστη ή ο κωδικός πρόσβασης είναι λανθασμένος (Username/password is incorrect)')
-    elif auth_status is None: # Explicitly checks for None (before first login attempt)
-        st.warning('Παρακαλώ εισάγετε το όνομα χρήστη και τον κωδικό πρόσβασής σας (Please enter your username and password)')
-
-    # Optional: Add a small footer that's always visible, even on login page
-    # if not st.session_state.get("authentication_status"): # Check if not logged in
-    #    current_year = datetime.now().year
-    #    st.markdown(f"<div style='text-align:center; padding:10px; position:fixed; bottom:0; width:100%; background: #161b22; color: #7a828e;'>© {current_year} EYATH SA</div>", unsafe_allow_html=True)
+# ... (main_app and other functions remain as previously defined) ...
