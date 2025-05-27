@@ -1,6 +1,9 @@
 [server]
-port = ${PORT}
+port = 8501
 address = "0.0.0.0"
+
+[runner]
+workingDirectory = "/app"
 
 [theme]
 primaryColor = "#009688"
