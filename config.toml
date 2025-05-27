@@ -1,0 +1,15 @@
+[server]
+port = 8501
+address = "0.0.0.0"
+
+[browser]
+serverAddress = "0.0.0.0"
+serverPort = 8501
+
+[theme]
+primaryColor = "#007bff"
+secondaryColor = "#6c757d"
+font = "sans serif"
+
+[runner]
+workingDirectory = "/app"

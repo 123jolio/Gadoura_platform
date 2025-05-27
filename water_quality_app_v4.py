@@ -118,7 +118,12 @@ except Exception as e:
 
 # --- Global Configuration & Constants ---
 DEBUG = False
-APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
+if 'STREAMLIT_APP_DIR' in os.environ:
+    # Running in Streamlit Cloud
+    APP_BASE_DIR = os.environ['STREAMLIT_APP_DIR']
+else:
+    # Running locally
+    APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
 LOGO_PATH = os.path.join(APP_BASE_DIR, "logo.jpg")
 
 WATERBODY_FOLDERS = {
@@ -487,6 +492,7 @@ def get_data_folder(waterbody: str, index_name: str) -> str | None:
         index_specific_folder = index_name # Fallback
 
     data_folder = os.path.join(APP_BASE_DIR, waterbody_folder_name, index_specific_folder)
+    debug_message(f"DEBUG: Final data folder path: {data_folder}")
     debug_message(f"DEBUG: Αναζήτηση φακέλου δεδομένων: {data_folder}")
 
     if not os.path.exists(data_folder) or not os.path.isdir(data_folder):
