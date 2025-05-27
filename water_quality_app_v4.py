@@ -664,9 +664,13 @@ def load_data_for_lake_processing(input_folder: str, shapefile_name="shapefile.x
                 st.error(f"Σφάλμα επεξεργασίας εικόνας {fp_iter}: {e}")
                 continue
 
-    if not images:
-        st.warning(f"Δεν φορτώθηκαν έγκυρες εικόνες από τον φάκελο: {input_folder}."); return None, None, None, None
-    return np.stack(images, axis=0), np.array(days), dates_list, first_profile
+        if not images:
+            st.warning(f"Δεν φορτώθηκαν έγκυρες εικόνες από τον φάκελο: {input_folder}."); return None, None, None, None
+
+        return images, days, dates_list, first_profile
+    except Exception as e:
+        st.error(f"Απρόσμενο σφάλμα κατά την επεξεργασία εικόνων: {e}")
+        return None, None, None, None
 
 
 def run_lake_processing_app(waterbody: str, index_name: str):
