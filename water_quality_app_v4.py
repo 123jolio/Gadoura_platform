@@ -773,9 +773,21 @@ def run_lake_processing_app(waterbody: str, index_name: str):
                     st.error("Δεν υπάρχουν δεδομένα εικόνας για την επεξεργασία")
                     return
                 
-                stack_filt = STACK[indices_to_keep, :, :]
-                days_filt = DAYS[indices_to_keep]
+                # Convert indices to numpy array for proper indexing
+                indices_to_keep_array = np.array(indices_to_keep)
+                
+                stack_filt = STACK[indices_to_keep_array, :, :]
+                days_filt = np.array(DAYS)[indices_to_keep_array]
                 filtered_dates_objects = [DATES[i] for i in indices_to_keep]
+                
+                # Verify shapes and sizes
+                if len(stack_filt) == 0:
+                    st.warning("Δεν βρέθηκαν δεδομένα για την επιλεγμένη περίοδο")
+                    return
+                
+                debug_message(f"DEBUG: Μεγεθής φιλτραρισμένης στοίβας: {stack_filt.shape}")
+                debug_message(f"DEBUG: Μεγεθής φιλτραρισμένων ημερών: {len(days_filt)}")
+                debug_message(f"DEBUG: Μεγεθής φιλτραρισμένων dates: {len(filtered_dates_objects)}")
                 
                 # Verify shapes and sizes
                 if len(stack_filt) == 0:
