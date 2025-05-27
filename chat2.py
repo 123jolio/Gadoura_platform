@@ -33,131 +33,18 @@ import matplotlib.colors as mcolors
 DEBUG = False
 
 def debug(*args, **kwargs):
+    """Βοηθητική συνάρτηση για εμφάνιση μηνυμάτων αποσφαλμάτωσης, αν είναι ενεργοποιημένη."""
     if DEBUG:
         st.write(*args, **kwargs)
 
-# --------------------------------------------------------------------------
-# Parsing KML -> sampling points
-# --------------------------------------------------------------------------
-def parse_sampling_kml(kml_source) -> list:
-    try:
-        # Κάνε reset το pointer αν είναι file uploader
-        if hasattr(kml_source, "seek"):
-            kml_source.seek(0)
-        if hasattr(kml_source, "read"):
-            tree = ET.parse(kml_source)
-        else:
-            tree = ET.parse(str(kml_source))
-        root = tree.getroot()
-        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-        points = []
-        for ls in root.findall('.//kml:LineString', ns):
-            coords = ls.find('kml:coordinates', ns).text.strip().split()
-            for i, coord in enumerate(coords):
-                lon, lat, *_ = coord.split(',')
-                points.append((f"Point {i+1}", float(lon), float(lat)))
-        return points
-    except Exception as e:
-        st.error(f"Σφάλμα ανάλυσης KML: {e}")
-        return []
-
-# --------------------------------------------------------------------------
-# Core sampling analyzer
-# --------------------------------------------------------------------------
-def analyze_sampling(sampling_points, first_image_data, first_transform,
-                     images_folder, lake_height_path, selected_points,
-                     lower_thresh=0, upper_thresh=255,
-                     date_min=None, date_max=None):
-    results_colors = {name: [] for name, _, _ in sampling_points}
-    results_mg = {name: [] for name, _, _ in sampling_points}
-    
-    for filename in sorted(os.listdir(images_folder)):
-        if not filename.lower().endswith(('.tif', '.tiff')):
-            continue
-        m = re.search(r'(\d{4}_\d{2}_\d{2})', filename)
-        if not m:
-            continue
-        date_str = m.group(1)
-        try:
-            date_obj = datetime.strptime(date_str, '%Y_%m_%d')
-        except ValueError:
-            continue
-        if date_min and date_obj.date() < date_min:
-            continue
-        if date_max and date_obj.date() > date_max:
-            continue
-
-        path = os.path.join(images_folder, filename)
-        with rasterio.open(path) as src:
-            if src.count < 3:
-                continue
-            for name, lon, lat in sampling_points:
-                col, row = (~src.transform) * (lon, lat)
-                col, row = int(col), int(row)
-                if not (0 <= col < src.width and 0 <= row < src.height):
-                    continue
-                window = rasterio.windows.Window(col, row, 1, 1)
-                r = src.read(1, window=window)[0,0]
-                g = src.read(2, window=window)[0,0]
-                b = src.read(3, window=window)[0,0]
-                mg = (g/255.0)*2.0
-                results_mg[name].append((date_obj, mg))
-                results_colors[name].append((date_obj, (r/255, g/255, b/255)))
-
-    # GeoTIFF figure
-    rgb = first_image_data.transpose((1,2,0))/255.0
-    fig_geo = px.imshow(rgb, title='GeoTIFF with sampling points')
-    for name, lon, lat in sampling_points:
-        col, row = (~first_transform) * (lon, lat)
-        fig_geo.add_trace(go.Scatter(x=[col], y=[row], mode='markers',
-                                     marker=dict(color='red', size=8), name=name))
-    fig_geo.update_xaxes(visible=False)
-    fig_geo.update_yaxes(visible=False)
-    fig_geo.update_layout(width=900, height=600)
-
-    # lake height data
-    try:
-        df_h = pd.read_excel(lake_height_path)
-        df_h['Date'] = pd.to_datetime(df_h.iloc[:,0])
-        df_h.sort_values('Date', inplace=True)
-    except Exception:
-        df_h = pd.DataFrame(columns=['Date','Height'])
-
-    # Pixel colors + lake height
-    fig_colors = make_subplots(specs=[[{'secondary_y':True}]])
-    for i, name in enumerate(sampling_points):
-        n = name[0]
-        if n not in selected_points:
-            continue
-        data = sorted(results_colors[n], key=lambda x:x[0])
-        dates, cols = zip(*data) if data else ([],[])
-        cols_rgb = [f"rgb({int(c[0]*255)},{int(c[1]*255)},{int(c[2]*255)})" for c in cols]
-        fig_colors.add_trace(go.Scatter(x=dates, y=[i]*len(dates), mode='markers',
-                                        marker=dict(color=cols_rgb, size=10), name=n), secondary_y=False)
-    if not df_h.empty:
-        fig_colors.add_trace(go.Scatter(x=df_h['Date'], y=df_h.iloc[:,1],
-                                        mode='lines', name='Lake Height', line=dict(color='blue')), secondary_y=True)
-    fig_colors.update_layout(title='Pixel colors & Lake height')
-
-    # Mean mg plot
-    all_mg = {}
-    for vals in results_mg.values():
-        for d, v in vals:
-            all_mg.setdefault(d, []).append(v)
-    dates = sorted(all_mg)
-    mean_mg = [np.mean(all_mg[d]) for d in dates]
-    fig_mg = go.Figure(go.Scatter(x=dates, y=mean_mg, mode='markers',
-                                   marker=dict(color=mean_mg, colorscale='Viridis', colorbar=dict(title='mg/m³'), size=8)))
-    fig_mg.update_layout(title='Mean mg/m³ over time')
-
-    # Dual plot
-    fig_dual = make_subplots(specs=[[{'secondary_y':True}]])
-    if not df_h.empty:
-        fig_dual.add_trace(go.Scatter(x=df_h['Date'], y=df_h.iloc[:,1], name='Lake Height'), secondary_y=False)
-    fig_dual.add_trace(go.Scatter(x=dates, y=mean_mg, name='Mean mg/m³', mode='markers'), secondary_y=True)
-    fig_dual.update_layout(title='Lake Height & Mean mg/m³')
-
-    return fig_geo, fig_dual, fig_colors, fig_mg, results_colors, results_mg, df_h
+# -------------------------------------------------------------------------
+# Διαμόρφωση σελίδας Streamlit
+# -------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Ποιοτικά χαρακτηριστικά Επιφανειακού Ύδατος",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # -----------------------------------------------------------------------------
 # Εξατομίκευση CSS για επαγγελματική εμφάνιση
@@ -254,23 +141,7 @@ def create_chl_legend_figure():
     cbar.ax.set_xticklabels([str(l) for l in levels])
     cbar.set_label("Chlorophyll‑a concentration (mg/m³)")
     return fig
-def create_chl_legend_figure_vertical():
-    levels = [0, 6, 12, 20, 30, 50]
-    colors = ["#496FF2", "#82D35F", "#FEFD05", "#FD0004", "#8E2026", "#D97CF5"]
-    cmap = mcolors.LinearSegmentedColormap.from_list(
-        "ChlLegend",
-        list(zip(np.linspace(0, 1, len(levels)), colors))
-    )
-    norm = mcolors.Normalize(vmin=levels[0], vmax=levels[-1])
-    fig, ax = plt.subplots(figsize=(1.2, 6))  # στενή και ψηλή
-    fig.subplots_adjust(left=0.4, right=0.6, top=0.95, bottom=0.05)
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, cax=ax, orientation="vertical", ticks=levels)
-    cbar.ax.set_yticklabels([str(l) for l in levels])
-    cbar.set_label("Chlorophyll‑a (mg/m³)")
-    plt.tight_layout()
-    return fig
+
 # -----------------------------------------------------------------------------
 # Βοηθητική Συνάρτηση για Επιλογή φακέλου δεδομένων
 # -----------------------------------------------------------------------------
@@ -1228,15 +1099,12 @@ def run_water_quality_dashboard(waterbody: str, index: str):
                         st.pyplot(legend_fig)
 
                 with nested_tabs[3]:
-                    col1, col2 = st.columns([8, 1])
-                    with col1:
-                        fig_colors.update_layout(width=2000, height=500)
-                        st.plotly_chart(fig_colors, use_container_width=True, key="default_fig_colors")
-                    with col2:
-                       if index == "Χλωροφύλλη":
-                           st.markdown("#### Legend for Chlorophyll‑a")
-                           legend_fig = create_chl_legend_figure_vertical()
-                           st.pyplot(legend_fig)
+                    st.plotly_chart(fig_colors, use_container_width=True, key="upload_fig_colors")
+                    # legend μόνο για Χλωροφύλλη
+                    if index == "Χλωροφύλλη":
+                        st.markdown("### Legend for Chlorophyll-a")
+                        legend_fig = create_chl_legend_figure()
+                        st.pyplot(legend_fig)
 
                 with nested_tabs[4]:
                     st.plotly_chart(fig_mg, use_container_width=True, key="upload_fig_mg")
@@ -1294,140 +1162,57 @@ def run_burned_areas():
         st.info("Δεν υπάρχουν δεδομένα ή λειτουργίες για ανάλυση καμένων περιοχών.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-
-# --------------------------------------------------------------------------
-# Predictive Tools with on-the-fly re-calculation for all indices
-# --------------------------------------------------------------------------
-def run_predictive_tools(waterbody: str, index: str):
+# -----------------------------------------------------------------------------
+# Προφίλ Ύψους (Placeholder)
+# -----------------------------------------------------------------------------
+def run_water_level_profiles(waterbody: str, index: str):
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.title(f"Εργαλεία Πρόβλεψης & Έγκαιρης Ενημέρωσης ({waterbody} - {index})")
-
-        # 1) Charts to recalc
-        chart_options = ["GeoTIFF", "Pixel Colors", "Lake Height", "Μέσο mg/m³"]
-        selected_charts = st.multiselect(
-            "Επίλεξε διαγράμματα για επανυπολογισμό",
-            options=chart_options,
-            default=chart_options
-        )
-
-        # 2) Filtering params
-        st.markdown("**Παράμετροι φιλτραρίσματος**")
-        lower_thresh, upper_thresh = st.slider(
-            "Threshold range (pixel)",
-            0, 255, (0, 255)
-        )
-        date_min = st.date_input("Ημερομηνία από", value=date(2015, 1, 1))
-        date_max = st.date_input("Ημερομηνία έως", value=date.today())
-        sampling_type = st.radio("Sampling set", ["Default", "Upload"])
-
-        # 3) Recompute when clicked
-        if st.button("Επανυπολόγισε επιλεγμένα διαγράμματα"):
-            for idx in ["Χλωροφύλλη", "Πραγματικό", "Θολότητα"]:
-                st.header(f"--- Index: {idx} ---")
-
-                folder = get_data_folder(waterbody, idx)
-                if not folder:
-                    st.error(f"Δεν υπάρχει φάκελος για {idx}.")
-                    continue
-
-                images_folder  = os.path.join(folder, "GeoTIFFs")
-                lake_height_xl = os.path.join(folder, "lake height.xlsx")
-                default_kml    = os.path.join(folder, "sampling.kml")
-
-                # pick KML
-                if sampling_type == "Default":
-                    kml = default_kml
-                else:
-                    uploaded = st.file_uploader(f"Upload KML για {idx}", type="kml", key=f"upl_{idx}")
-                    if not uploaded:
-                        st.warning(f"Δεν ανέβηκε KML για {idx}.")
-                        continue
-                    kml = uploaded
-
-                points = parse_sampling_kml(kml)
-                if not points:
-                    st.warning(f"Δεν βρέθηκαν σημεία για {idx}.")
-                    continue
-
-                # load first GeoTIFF for context
-                tifs = sorted(glob.glob(os.path.join(images_folder, "*.tif")))
-                if not tifs:
-                    st.error(f"Δεν βρέθηκαν TIFF για {idx}.")
-                    continue
-                with rasterio.open(tifs[0]) as src:
-                    if src.count < 3:
-                        st.error(f"Το TIFF για {idx} δεν έχει 3 κανάλια.")
-                        continue
-                    first_img = src.read([1,2,3])
-                    first_tr = src.transform
-
-                # run analyzer
-                try:
-                    fig_geo, fig_dual, fig_colors, fig_mg, *_ = analyze_sampling(
-                        sampling_points=points,
-                        first_image_data=first_img,
-                        first_transform=first_tr,
-                        images_folder=images_folder,
-                        lake_height_path=lake_height_xl,
-                        selected_points=[pt[0] for pt in points],
-                        lower_thresh=lower_thresh,
-                        upper_thresh=upper_thresh,
-                        date_min=date_min,
-                        date_max=date_max
-                    )
-                except Exception as e:
-                    st.error(f"Σφάλμα επανυπολογισμού για {idx}: {e}")
-                    continue
-
-                # draw only what was requested
-                if "GeoTIFF" in selected_charts:
-                    st.subheader("GeoTIFF εικόνα")
-                    st.plotly_chart(fig_geo, use_container_width=True, key=f"fig_geo_{idx}")
-
-                if "Pixel Colors" in selected_charts:
-                    st.subheader("Pixel Colors over time")
-                    st.plotly_chart(fig_colors, use_container_width=True, key=f"fig_colors_{idx}")
-
-                if "Lake Height" in selected_charts:
-                    st.subheader("Lake Height over time")
-                    height_trace = fig_dual.data[0]
-                    fig_h = go.Figure([height_trace]).update_layout(title="Lake Height")
-                    st.plotly_chart(fig_h, use_container_width=True, key=f"fig_height_{idx}")
-
-                if "Μέσο mg/m³" in selected_charts:
-                    st.subheader("Μέσο mg/m³ over time")
-                    st.plotly_chart(fig_mg, use_container_width=True, key=f"fig_mg_{idx}")
-
+        st.title(f"Προφίλ Ύψους ({waterbody}) [Placeholder]")
+        st.info("Δεν υπάρχουν δεδομένα ή λειτουργίες για προφίλ ύψους νερού.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --------------------------------------------------------------------------
-# Main Entry Point (drop-in)
-# --------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Pattern Analysis (Placeholder)
+# -----------------------------------------------------------------------------
+def run_pattern_analysis(waterbody: str, index: str):
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.title(f"Pattern Analysis ({waterbody} - {index}) [Placeholder]")
+        st.info("Δεν υπάρχουν διαθέσιμα δεδομένα για Pattern Analysis.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# Main Entry Point
+# -----------------------------------------------------------------------------
 def main():
+    debug("DEBUG: Εισήχθη η main()")
     run_intro_page()
     run_custom_ui()
+    wb = st.session_state.get("waterbody_choice", None)
+    idx = st.session_state.get("index_choice", None)
+    analysis = st.session_state.get("analysis_choice", None)
+    debug("DEBUG: Επιλεγμένα: υδάτινο σώμα =", wb, "δείκτης =", idx, "ανάλυση =", analysis)
 
-    wb    = st.session_state.get("waterbody_choice")
-    idx   = st.session_state.get("index_choice")
-    analy = st.session_state.get("analysis_choice")
-
-    if wb == "Γαδουρά" and idx in ["Χλωροφύλλη", "Πραγματικό", "Θολότητα"]:
-        if analy == "Επιφανειακή Αποτύπωση":
+    if idx in ["Χλωροφύλλη", "Πραγματικό", "Θολότητα"] and wb in ["Γαδουρά"]:
+        if analysis == "Επιφανειακή Αποτύπωση":
             run_lake_processing_app(wb, idx)
-        elif analy == "Προφίλ ποιότητας και στάθμης":
+        elif analysis == "Προφίλ ποιότητας και στάθμης":
             run_water_quality_dashboard(wb, idx)
-        elif analy == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
-            run_predictive_tools(wb, idx)
+        elif analysis == "εργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
+            run_water_level_profiles(wb, idx)
         else:
             st.info("Παρακαλώ επιλέξτε ένα είδος ανάλυσης.")
-    elif analy == "Burned Areas":
+    elif analysis == "Burned Areas":
         if wb == "Γαδουρά":
             st.warning("Η ενότητα Burned Areas είναι υπό ανάπτυξη.")
         else:
             st.warning("Το 'Burned Areas' είναι διαθέσιμο μόνο για το υδάτινο σώμα Γαδουρά.")
     else:
-        st.warning("Δεν υπάρχουν διαθέσιμα δεδομένα για αυτόν τον συνδυασμό δείκτη/υδάτινου σώματος.")
+        st.warning(
+            "Δεν υπάρχουν διαθέσιμα δεδομένα για αυτόν τον συνδυασμό δείκτη/υδάτινου σώματος. "
+            "Για παράδειγμα, οι επιλογές 'Χλωροφύλλη' και 'Πραγματικό' είναι διαθέσιμες μόνο για (Κορώνεια, Πολυφύτου, Γαδουρά, Αξιός)."
+        )
 
 if __name__ == "__main__":
-    main() 
+    main()
