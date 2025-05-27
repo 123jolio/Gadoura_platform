@@ -1,0 +1,14 @@
+streamlit>=1.20.0
+numpy>=1.24.0
+pandas>=2.0.0
+rasterio>=1.3.0
+plotly>=5.17.0
+matplotlib>=3.7.0
+python-dateutil>=2.8.2
+streamlit-authenticator==0.4.2
+scikit-image
+simplekml
+requests
+openpyxl
+streamlit-drawable-canvas
+xlsxwriter
