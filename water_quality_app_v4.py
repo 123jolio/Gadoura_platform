@@ -759,9 +759,30 @@ def run_lake_processing_app(waterbody: str, index_name: str):
             st.markdown('</div>', unsafe_allow_html=True); return
 
         with st.spinner("Επεξεργασία φιλτραρισμένων δεδομένων και δημιουργία γραφημάτων..."):
-            stack_filt = STACK[indices_to_keep, :, :]
-            days_filt = DAYS[indices_to_keep]
-            filtered_dates_objects = [DATES[i] for i in indices_to_keep]
+            try:
+                if STACK is None:
+                    st.error("Δεν υπάρχουν δεδομένα εικόνας για την επεξεργασία")
+                    return
+                
+                stack_filt = STACK[indices_to_keep, :, :]
+                days_filt = DAYS[indices_to_keep]
+                filtered_dates_objects = [DATES[i] for i in indices_to_keep]
+                
+                # Verify shapes and sizes
+                if len(stack_filt) == 0:
+                    st.warning("Δεν βρέθηκαν δεδομένα για την επιλεγμένη περίοδο")
+                    return
+                
+                debug_message(f"DEBUG: Μεγεθής φιλτραρισμένης στοίβας: {stack_filt.shape}")
+                debug_message(f"DEBUG: Μεγεθής φιλτραρισμένων ημερών: {len(days_filt)}")
+            except IndexError as e:
+                st.error(f"Σφάλμα φιλτραρισμού δεδομένων: {e}")
+                debug_message(f"DEBUG: Προβλήμα με indices_to_keep: {indices_to_keep}")
+                debug_message(f"DEBUG: Μεγεθής STACK: {STACK.shape if STACK is not None else 'None'}")
+                return
+            except Exception as e:
+                st.error(f"Απρόσμενο σφάλμα κατά την επεξεργασία δεδομένων: {e}")
+                return
 
             lower_t, upper_t = threshold_range_val
             in_range_bool_mask = np.logical_and(stack_filt >= lower_t, stack_filt <= upper_t)
