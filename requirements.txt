@@ -1,14 +1,22 @@
 streamlit>=1.20.0
+streamlit-authenticator
 numpy>=1.24.0
 pandas>=2.0.0
-rasterio>=1.3.0
-plotly>=5.17.0
 matplotlib>=3.7.0
+plotly>=5.17.0
+rasterio>=1.3.0
 python-dateutil>=2.8.2
-streamlit-authenticator==0.4.2
+rasterio
+shapely
+folium
+>>>>>>> b280b135a6065cdaf75324750d3e192dee441f9f
 scikit-image
 simplekml
 requests
 openpyxl
 streamlit-drawable-canvas
 xlsxwriter
+<<<<<<< HEAD
+=======
+
+>>>>>>> b280b135a6065cdaf75324750d3e192dee441f9f
