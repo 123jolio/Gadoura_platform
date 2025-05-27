@@ -644,6 +644,18 @@ def load_data_for_lake_processing(input_folder: str, shapefile_name="shapefile.x
             st.error(f"Σφάλμα προετοιμασίας φόρτωσης (πρώτη εικόνα/shapefile): {e}")
             return None, None, None, None
 
+        # Early exit if images are too large and no shapefile mask is applied
+        MAX_IMAGE_DIM_WITHOUT_MASK = 3000 # pixels
+        if lake_geom is None and first_profile is not None:
+            if first_profile.get('width', 0) > MAX_IMAGE_DIM_WITHOUT_MASK or first_profile.get('height', 0) > MAX_IMAGE_DIM_WITHOUT_MASK:
+                st.error(f"Κρίσιμο Σφάλμα: Η πρώτη εικόνα ({tif_files[0] if tif_files else 'N/A'}) έχει διαστάσεις {first_profile.get('width', 'N/A')}x{first_profile.get('height', 'N/A')}, "
+                         "και δεν έχει παρασχεθεί έγκυρο shapefile για μάσκα. "
+                         "Η επεξεργασία τόσο μεγάλων εικόνων χωρίς μάσκα μπορεί να οδηγήσει σε εξάντληση μνήμης. "
+                         "Παρακαλώ, προσθέστε ένα shapefile (shapefile.xml ή shapefile.txt) στον φάκελο δεδομένων "
+                         "ή χρησιμοποιήστε μικρότερες εικόνες.")
+                debug_message(f"DEBUG: Large image ({first_profile.get('width', 'N/A')}x{first_profile.get('height', 'N/A')}) detected without shapefile mask. Aborting load_data_for_lake_processing.")
+                return None, None, None, None
+
         # Process all images
         images, days, dates_list = [], [], []
         for fp_iter in tif_files:
@@ -671,11 +683,20 @@ def load_data_for_lake_processing(input_folder: str, shapefile_name="shapefile.x
 
         return images, days, dates_list, first_profile
     except Exception as e:
-        st.error(f"Απρόσμενο σφάλμα κατά την επεξεργασία εικόνων: {e}")
+        st.error(f"Απρόσμενο σφάλμα κατά την φόρτωση δεδομένων στο load_data_for_lake_processing: {e}")
+        debug_message(f"DEBUG: Exception in load_data_for_lake_processing: {e}")
         return None, None, None, None
 
-
 def run_lake_processing_app(waterbody: str, index_name: str):
+    global STACK, DAYS, DATES, LAKE_GEOM, INPUT_FOLDER_PATH, BASE_DIR # Ensure all used globals are listed
+    debug_message(f"DEBUG: Εκκίνηση run_lake_processing_app για {waterbody} με δείκτη {index_name}")
+    key_suffix = f"_{waterbody.replace(' ', '_').lower()}_{index_name.replace(' ', '_').lower()}"
+
+    if STACK is None or DAYS is None or DATES is None:
+        st.error("Κρίσιμα δεδομένα (STACK, DAYS, ή DATES) δεν φορτώθηκαν σωστά. Η επεξεργασία δεν μπορεί να συνεχιστεί.")
+        debug_message(f"DEBUG: STACK is None: {STACK is None}, DAYS is None: {DAYS is None}, DATES is None: {DATES is None}")
+        return
+
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True) # Changed from custom-card to card
         st.header(f"Επιφανειακή Αποτύπωση: {waterbody} - {index_name}")
@@ -782,20 +803,12 @@ def run_lake_processing_app(waterbody: str, index_name: str):
                 
                 # Verify shapes and sizes
                 if len(stack_filt) == 0:
-                    st.warning("Δεν βρέθηκαν δεδομένα για την επιλεγμένη περίοδο")
+                    st.warning("Δεν βρέθηκαν δεδομένα για την επιλεγμένη περίοδο φιλτραρίσματος.")
                     return
                 
                 debug_message(f"DEBUG: Μεγεθής φιλτραρισμένης στοίβας: {stack_filt.shape}")
                 debug_message(f"DEBUG: Μεγεθής φιλτραρισμένων ημερών: {len(days_filt)}")
                 debug_message(f"DEBUG: Μεγεθής φιλτραρισμένων dates: {len(filtered_dates_objects)}")
-                
-                # Verify shapes and sizes
-                if len(stack_filt) == 0:
-                    st.warning("Δεν βρέθηκαν δεδομένα για την επιλεγμένη περίοδο")
-                    return
-                
-                debug_message(f"DEBUG: Μεγεθής φιλτραρισμένης στοίβας: {stack_filt.shape}")
-                debug_message(f"DEBUG: Μεγεθής φιλτραρισμένων ημερών: {len(days_filt)}")
             except IndexError as e:
                 st.error(f"Σφάλμα φιλτραρισμού δεδομένων: {e}")
                 debug_message(f"DEBUG: Προβλήμα με indices_to_keep: {indices_to_keep}")
@@ -807,38 +820,66 @@ def run_lake_processing_app(waterbody: str, index_name: str):
 
             lower_t, upper_t = threshold_range_val
             in_range_bool_mask = np.logical_and(stack_filt >= lower_t, stack_filt <= upper_t)
+
+            # Check for potentially very large images if no mask was applied
+            if STACK is not None and (STACK.shape[1] > 3000 or STACK.shape[2] > 3000):
+                st.warning("ΠΡΟΕΙΔΟΠΟΙΗΣΗ: Οι διαστάσεις των εικόνων είναι πολύ μεγάλες. "
+                           "Αυτό μπορεί να οδηγήσει σε υψηλή χρήση μνήμης και πιθανές αποτυχίες, ειδικά χωρίς shapefile για μάσκα. "
+                           f"Τρέχουσες διαστάσεις εικόνων (στοίβα): {STACK.shape[1]}x{STACK.shape[2]}.")
             
             st.subheader("Ανάλυση Χαρτών")
             expander_col1, expander_col2 = st.columns(2)
 
             with expander_col1:
                 with st.expander("Χάρτης: Ημέρες εντός Εύρους Τιμών", expanded=True):
-                    days_in_range_map = np.nansum(in_range_bool_mask, axis=0)
-                    fig_days = px.imshow(days_in_range_map, color_continuous_scale="plasma", labels={"color": "Ημέρες"})
-                    st.plotly_chart(fig_days, use_container_width=True, key=f"fig_days_map{key_suffix}")
-                    df_days_in_range = pd.DataFrame(days_in_range_map)
-                    add_excel_download_button(df_days_in_range, common_filename_prefix, "Days_in_Range_Map", f"excel_days_map{key_suffix}")
-                    st.caption("Δείχνει πόσες ημέρες κάθε pixel ήταν εντός του επιλεγμένου εύρους τιμών.")
+                    try:
+                        days_in_range_map = np.nansum(in_range_bool_mask, axis=0)
+                        if days_in_range_map.size == 0:
+                            st.info("Δεν υπάρχουν δεδομένα για εμφάνιση στον χάρτη 'Ημέρες εντός Εύρους Τιμών' μετά το φιλτράρισμα.")
+                        else:
+                            fig_days = px.imshow(days_in_range_map, color_continuous_scale="plasma", labels={"color": "Ημέρες"})
+                            st.plotly_chart(fig_days, use_container_width=True, key=f"fig_days_map{key_suffix}")
+                            df_days_in_range = pd.DataFrame(days_in_range_map)
+                            add_excel_download_button(df_days_in_range, common_filename_prefix, "Days_in_Range_Map", f"excel_days_map{key_suffix}")
+                            st.caption("Δείχνει πόσες ημέρες κάθε pixel ήταν εντός του επιλεγμένου εύρους τιμών.")
+                    except Exception as e_map_days:
+                        st.error(f"Σφάλμα κατά τη δημιουργία του χάρτη 'Ημέρες εντός Εύρους Τιμών': {e_map_days}")
+                        debug_message(f"DEBUG: Error plotting days_in_range_map: {e_map_days}")
 
             tick_vals_days = [1,32,60,91,121,152,182,213,244,274,305,335,365]
             tick_text_days = ["Ιαν","Φεβ","Μαρ","Απρ","Μαΐ","Ιουν","Ιουλ","Αυγ","Σεπ","Οκτ","Νοε","Δεκ",""]
 
             with expander_col2:
                 with st.expander("Χάρτης: Μέση Ημέρα Εμφάνισης εντός Εύρους", expanded=True):
-                    days_array_expanded = days_filt.reshape((-1, 1, 1))
-                    sum_days_in_range = np.nansum(days_array_expanded * in_range_bool_mask, axis=0)
-                    count_pixels_in_range = np.nansum(in_range_bool_mask, axis=0)
-                    mean_day_map = np.divide(sum_days_in_range, count_pixels_in_range, 
-                                            out=np.full(sum_days_in_range.shape, np.nan), 
-                                            where=(count_pixels_in_range != 0))
-                    fig_mean_day = px.imshow(mean_day_map, color_continuous_scale="RdBu", 
-                                            labels={"color": "Μέση Ημέρα (1-365)"},
-                                            color_continuous_midpoint=182)
-                    fig_mean_day.update_layout(coloraxis_colorbar=dict(tickmode='array', tickvals=tick_vals_days, ticktext=tick_text_days))
-                    st.plotly_chart(fig_mean_day, use_container_width=True, key=f"fig_mean_day_map{key_suffix}")
-                    df_mean_day_map = pd.DataFrame(mean_day_map)
-                    add_excel_download_button(df_mean_day_map, common_filename_prefix, "Mean_Day_Map", f"excel_mean_day_map{key_suffix}")
-                    st.caption("Δείχνει τη μέση ημέρα του έτους που ένα pixel ήταν εντός του εύρους τιμών.")
+                    try:
+                        if days_filt.size == 0 or in_range_bool_mask.size == 0:
+                            st.info("Δεν υπάρχουν δεδομένα για τον υπολογισμό του χάρτη 'Μέση Ημέρα Εμφάνισης'.")
+                        else:
+                            days_array_expanded = days_filt.reshape((-1, 1, 1))
+                            sum_days_in_range = np.nansum(days_array_expanded * in_range_bool_mask, axis=0)
+                            count_pixels_in_range = np.nansum(in_range_bool_mask, axis=0)
+                            
+                            # Ensure count_pixels_in_range has the same shape as sum_days_in_range for np.divide's out parameter
+                            if sum_days_in_range.shape != count_pixels_in_range.shape:
+                                st.error("Σφάλμα διαστάσεων μεταξύ sum_days_in_range και count_pixels_in_range.")
+                                debug_message(f"DEBUG: Shape mismatch: sum_days_in_range={sum_days_in_range.shape}, count_pixels_in_range={count_pixels_in_range.shape}")
+                            else:
+                                mean_day_map = np.divide(sum_days_in_range, count_pixels_in_range, 
+                                                       out=np.full_like(sum_days_in_range, np.nan, dtype=np.float64), 
+                                                       where=count_pixels_in_range!=0)
+                                
+                                if mean_day_map.size == 0 or np.all(np.isnan(mean_day_map)):
+                                    st.info("Δεν υπάρχουν δεδομένα για εμφάνιση στον χάρτη 'Μέση Ημέρα Εμφάνισης'.")
+                                else:
+                                    fig_mean_day = px.imshow(mean_day_map, color_continuous_scale="RdYlBu_r", labels={"color": "Μέση Ημέρα"}, title="Μέση Ημέρα Εμφάνισης Εντός Εύρους")
+                                    fig_mean_day.update_coloraxes(colorbar_tickvals=tick_vals_days, colorbar_ticktext=tick_text_days)
+                                    st.plotly_chart(fig_mean_day, use_container_width=True, key=f"fig_mean_day_map{key_suffix}")
+                                    df_mean_day_map = pd.DataFrame(mean_day_map)
+                                    add_excel_download_button(df_mean_day_map, common_filename_prefix, "Mean_Day_Map", f"excel_mean_day_map{key_suffix}")
+                                    st.caption("Δείχνει τη μέση ημερολογιακή ημέρα του έτους που κάθε pixel ήταν εντός του επιλεγμένου εύρους τιμών.")
+                    except Exception as e_map_mean_day:
+                        st.error(f"Σφάλμα κατά τη δημιουργία του χάρτη 'Μέση Ημέρα Εμφάνισης': {e_map_mean_day}")
+                        debug_message(f"DEBUG: Error plotting mean_day_map: {e_map_mean_day}")
 
             st.subheader("Ανάλυση Δείγματος Εικόνας")
             expander_col3, expander_col4 = st.columns(2)
