@@ -120,7 +120,7 @@ except Exception as e:
 DEBUG = False
 if 'STREAMLIT_APP_DIR' in os.environ:
     # Running in Streamlit Cloud
-    APP_BASE_DIR = os.environ['STREAMLIT_APP_DIR']
+    APP_BASE_DIR = os.path.join(os.environ['STREAMLIT_APP_DIR'], 'data')
 else:
     # Running locally
     APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
@@ -491,11 +491,19 @@ def get_data_folder(waterbody: str, index_name: str) -> str | None:
     else:
         index_specific_folder = index_name # Fallback
 
-    data_folder = os.path.join(APP_BASE_DIR, waterbody_folder_name, index_specific_folder)
+    # Construct path based on environment
+    if 'STREAMLIT_APP_DIR' in os.environ:
+        # In Streamlit Cloud, data is expected to be in a 'data' subdirectory
+        data_folder = os.path.join(os.environ['STREAMLIT_APP_DIR'], 'data', waterbody_folder_name, index_specific_folder)
+    else:
+        # Local development
+        data_folder = os.path.join(APP_BASE_DIR, waterbody_folder_name, index_specific_folder)
+
     debug_message(f"DEBUG: Final data folder path: {data_folder}")
     debug_message(f"DEBUG: Αναζήτηση φακέλου δεδομένων: {data_folder}")
 
     if not os.path.exists(data_folder) or not os.path.isdir(data_folder):
+        st.error(f"Το φακέλο δεδομένων δεν βρέθηκε: {data_folder}")
         return None
     return data_folder
 
