@@ -553,52 +553,116 @@ def load_lake_shape_from_xml(xml_file_path: str, bounds: tuple = None,
     except Exception as e:
         st.error(f"Σφάλμα φόρτωσης περιγράμματος από {os.path.basename(xml_file_path)}: {e}"); return None
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def read_image(file_path: str, lake_shape: dict = None):
     debug_message(f"DEBUG: Ανάγνωση εικόνας: {file_path}")
     try:
-        with rasterio.open(file_path) as src:
-            img = src.read(1).astype(np.float32)
-            profile = src.profile.copy(); profile.update(dtype="float32")
+        # Check if file exists
+        if not os.path.exists(file_path):
+            st.error(f"Το αρχείο εικόνας δεν βρέθηκε: {file_path}")
+            return None, None
 
-            if src.nodata is not None: img = np.where(img == src.nodata, np.nan, img)
-            img = np.where(img == 0, np.nan, img) # Treat 0 as NaN if appropriate
+        # Try to open the file
+        try:
+            with rasterio.open(file_path) as src:
+                debug_message(f"DEBUG: Επιτυχής ανοιγμα αρχείου: {file_path}")
+                img = src.read(1).astype(np.float32)
+                profile = src.profile.copy(); profile.update(dtype="float32")
 
-            if lake_shape:
-                from rasterio.features import geometry_mask
-                poly_mask = geometry_mask([lake_shape], transform=src.transform, invert=True, out_shape=img.shape) # Invert=True to keep data INSIDE
-                img = np.where(poly_mask, img, np.nan)
-            return img, profile
+                if src.nodata is not None: 
+                    img = np.where(img == src.nodata, np.nan, img)
+                    debug_message(f"DEBUG: Εφαρμογή nodata value: {src.nodata}")
+                
+                img = np.where(img == 0, np.nan, img) # Treat 0 as NaN if appropriate
+                debug_message(f"DEBUG: Μεγεθος εικόνας: {img.shape}")
+
+                if lake_shape:
+                    from rasterio.features import geometry_mask
+                    poly_mask = geometry_mask([lake_shape], transform=src.transform, invert=True, out_shape=img.shape)
+                    img = np.where(poly_mask, img, np.nan)
+                    debug_message("DEBUG: Εφαρμογή περιγράμματος στην εικόνα")
+                
+                return img, profile
+        except rasterio.errors.RasterioIOError as rioe:
+            st.error(f"Σφάλμα ανάγνωσης εικόνας: {rioe}")
+            return None, None
+        except Exception as e:
+            st.error(f"Απρόσμενο σφάλμα ανάγνωσης εικόνας: {e}")
+            return None, None
+    except Exception as e:
+        st.error(f"Σφάλμα επεξεργασίας εικόνας: {e}")
+        return None, None
     except Exception as e:
         st.warning(f"Προειδοποίηση: Σφάλμα ανάγνωσης εικόνας {os.path.basename(file_path)}: {e}. Παραλείπεται."); return None, None
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data_for_lake_processing(input_folder: str, shapefile_name="shapefile.xml"):
     debug_message(f"DEBUG: load_data_for_lake_processing για: {input_folder}")
-    if not os.path.exists(input_folder):
-        st.error(f"Ο φάκελος εισόδου δεν υπάρχει: {input_folder}"); return None, None, None, None
-
-    shape_file_path = next((sp for sp in [os.path.join(input_folder, shapefile_name), os.path.join(input_folder, "shapefile.txt")] if os.path.exists(sp)), None)
-    if shape_file_path: debug_message(f"Βρέθηκε αρχείο περιγράμματος: {shape_file_path}")
-
-    tif_files = sorted([fp for fp in glob.glob(os.path.join(input_folder, "*.tif")) if os.path.basename(fp).lower() != "mask.tif"])
-    if not tif_files:
-        st.warning(f"Δεν βρέθηκαν GeoTIFF αρχεία στον φάκελο: {input_folder}"); return None, None, None, None
-
-    first_profile, lake_geom = None, None
     try:
-        with rasterio.open(tif_files[0]) as src_first:
-            first_profile = src_first.profile.copy()
-            if shape_file_path: lake_geom = load_lake_shape_from_xml(shape_file_path, bounds=src_first.bounds)
-    except Exception as e:
-        st.error(f"Σφάλμα προετοιμασίας φόρτωσης (πρώτη εικόνα/shapefile): {e}"); return None, None, None, None
+        # Check if input folder exists
+        if not os.path.exists(input_folder):
+            st.error(f"Ο φάκελος εισόδου δεν υπάρχει: {input_folder}")
+            return None, None, None, None
 
-    images, days, dates_list = [], [], []
-    for fp_iter in tif_files:
-        day_yr, date_obj = extract_date_from_filename(fp_iter)
-        if day_yr is None: continue
-        img_data, _ = read_image(fp_iter, lake_shape=lake_geom)
-        if img_data is not None: images.append(img_data); days.append(day_yr); dates_list.append(date_obj)
+        # Find shapefile
+        shape_file_path = None
+        for ext in [".xml", ".txt"]:
+            candidate_path = os.path.join(input_folder, f"shapefile{ext}")
+            if os.path.exists(candidate_path):
+                shape_file_path = candidate_path
+                debug_message(f"Βρέθηκε αρχείο περιγράμματος: {candidate_path}")
+                break
+
+        # Find TIFF files
+        tif_files = []
+        try:
+            tif_files = sorted([
+                fp for fp in glob.glob(os.path.join(input_folder, "*.tif")) 
+                if os.path.basename(fp).lower() != "mask.tif"
+            ])
+            debug_message(f"DEBUG: Βρέθηκαν {len(tif_files)} TIFF αρχεία")
+        except Exception as e:
+            st.error(f"Σφάλμα αναζήτησης TIFF αρχείων: {e}")
+            return None, None, None, None
+
+        if not tif_files:
+            st.warning(f"Δεν βρέθηκαν GeoTIFF αρχεία στον φάκελο: {input_folder}")
+            return None, None, None, None
+
+        # Process first image
+        first_profile, lake_geom = None, None
+        try:
+            debug_message(f"DEBUG: Επεξεργασία πρώτης εικόνας: {tif_files[0]}")
+            with rasterio.open(tif_files[0]) as src_first:
+                first_profile = src_first.profile.copy()
+                if shape_file_path:
+                    lake_geom = load_lake_shape_from_xml(shape_file_path, bounds=src_first.bounds)
+                    debug_message("DEBUG: Επιτυχής φόρτωση περιγράμματος")
+        except Exception as e:
+            st.error(f"Σφάλμα προετοιμασίας φόρτωσης (πρώτη εικόνα/shapefile): {e}")
+            return None, None, None, None
+
+        # Process all images
+        images, days, dates_list = [], [], []
+        for fp_iter in tif_files:
+            try:
+                debug_message(f"DEBUG: Επεξεργασία εικόνας: {fp_iter}")
+                day_yr, date_obj = extract_date_from_filename(fp_iter)
+                if day_yr is None:
+                    debug_message(f"DEBUG: Παραλείπεται εικόνα με άγνωστη ημερομηνία: {fp_iter}")
+                    continue
+                
+                img_data, _ = read_image(fp_iter, lake_shape=lake_geom)
+                if img_data is not None:
+                    images.append(img_data)
+                    days.append(day_yr)
+                    dates_list.append(date_obj)
+                    debug_message(f"DEBUG: Επιτυχής επεξεργασία εικόνας: {fp_iter}")
+                else:
+                    debug_message(f"DEBUG: Παραλείπεται εικόνα λόγω σφάλματος: {fp_iter}")
+            except Exception as e:
+                st.error(f"Σφάλμα επεξεργασίας εικόνας {fp_iter}: {e}")
+                continue
 
     if not images:
         st.warning(f"Δεν φορτώθηκαν έγκυρες εικόνες από τον φάκελο: {input_folder}."); return None, None, None, None
