@@ -577,11 +577,15 @@ def read_image(file_path: str, lake_shape: dict = None):
                 debug_message(f"DEBUG: Μεγεθος εικόνας: {img.shape}")
 
                 if lake_shape:
-                    from rasterio.features import geometry_mask
-                    poly_mask = geometry_mask([lake_shape], transform=src.transform, invert=True, out_shape=img.shape)
-                    img = np.where(poly_mask, img, np.nan)
-                    debug_message("DEBUG: Εφαρμογή περιγράμματος στην εικόνα")
-                
+                    try:
+                        from rasterio.features import geometry_mask
+                        poly_mask = geometry_mask([lake_shape], transform=src.transform, invert=True, out_shape=img.shape)
+                        img = np.where(poly_mask, img, np.nan)
+                        debug_message("DEBUG: Εφαρμογή περιγράμματος στην εικόνα")
+                    except Exception as e:
+                        st.warning(f"Προειδοποίηση: Σφάλμα εφαρμογής περιγράμματος: {e}")
+                        debug_message(f"DEBUG: Παραλείπεται εφαρμογή περιγράμματος λόγω σφάλματος")
+
                 return img, profile
         except rasterio.errors.RasterioIOError as rioe:
             st.error(f"Σφάλμα ανάγνωσης εικόνας: {rioe}")
@@ -592,8 +596,6 @@ def read_image(file_path: str, lake_shape: dict = None):
     except Exception as e:
         st.error(f"Σφάλμα επεξεργασίας εικόνας: {e}")
         return None, None
-    except Exception as e:
-        st.warning(f"Προειδοποίηση: Σφάλμα ανάγνωσης εικόνας {os.path.basename(file_path)}: {e}. Παραλείπεται."); return None, None
 
 @st.cache_data(show_spinner=False)
 def load_data_for_lake_processing(input_folder: str, shapefile_name="shapefile.xml"):
