@@ -2,12 +2,12 @@
 port = 8501
 address = "0.0.0.0"
 
-[runner]
-workingDirectory = "/app"
-
 [theme]
 primaryColor = "#009688"
 backgroundColor = "#161b22"
 secondaryBackgroundColor = "#2c2f36"
 textColor = "#e0e0e0"
 font = "sans serif"
+
+[runner]
+workingDirectory = "/app"
