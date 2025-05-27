@@ -59,8 +59,8 @@ authenticator = None
 try:
     authenticator = stauth.Authenticate(
         credentials,
-        "water_quality_app_cookie_v8", # Changed cookie name again
-        "a_very_random_secret_key_v8", # Changed key again
+        "water_quality_app_cookie_v9", # Changed cookie name again for freshness
+        "a_very_random_secret_key_v9", # Changed key again for freshness
         cookie_expiry_days=30
     )
 except Exception as e:
@@ -243,12 +243,10 @@ def run_custom_sidebar_ui_custom():
     waterbody = st.sidebar.selectbox("🌊 Υδάτινο σώμα", waterbody_options, index=default_wb_idx, key=SESSION_KEY_WATERBODY)
     index_name = st.sidebar.selectbox("🔬 Δείκτης", ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"], key=SESSION_KEY_INDEX)
     
-    # --- MODIFIED: Removed "Επιφανειακή Αποτύπωση" from options ---
     analysis_type = st.sidebar.selectbox( "📊 Είδος Ανάλυσης",
         ["Προφίλ ποιότητας και στάθμης", "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης"],
         key=SESSION_KEY_ANALYSIS
     )
-    # --- END OF MODIFICATION ---
 
     st.sidebar.markdown(
         f"""<div style="padding: 0.7rem; background:#2c2f36; border-radius:8px; margin-top:1.2rem;">
@@ -542,24 +540,6 @@ def load_data_for_lake_processing(input_folder: str, shapefile_name="shapefile.x
     if not images:
         st.warning(f"Δεν φορτώθηκαν έγκυρες εικόνες από τον φάκελο: {input_folder}."); return None, None, None, None
     return np.stack(images, axis=0), np.array(days), dates_list, first_profile
-
-
-# --- REMOVED: def run_lake_processing_app(waterbody: str, index_name: str): ---
-# The entire function for "Επιφανειακή Αποτύπωση" has been removed.
-# If you need a placeholder or a message for this removed module, 
-# you could define a simple function like this:
-#
-# def run_lake_processing_app_removed(waterbody: str, index_name: str):
-#     with st.container():
-#         st.markdown('<div class="card">', unsafe_allow_html=True)
-#         st.header(f"Επιφανειακή Αποτύπωση: {waterbody} - {index_name}")
-#         st.warning("Αυτή η ενότητα ανάλυσης ('Επιφανειακή Αποτύπωση') έχει απενεργοποιηθεί προσωρινά.")
-#         st.info("Παρακαλώ επιλέξτε μια άλλη 'Είδος Ανάλυσης' από την πλαϊνή μπάρα.")
-#         st.markdown('</div>', unsafe_allow_html=True)
-#
-# And then call run_lake_processing_app_removed in main_app if selected.
-# For now, it's completely removed as per the request to "remove all the module".
-
 
 def image_navigation_ui(images_folder: str, available_dates_map: dict,
                         session_state_key_for_idx: str, key_prefix: str,
@@ -1378,16 +1358,15 @@ def main_app():
         return
 
     if selected_wb == "Γαδουρά" and selected_idx in ["Χλωροφύλλη", "Πραγματικό", "Θολότητα"]:
-        # --- MODIFIED: Removed call to run_lake_processing_app ---
         if selected_an == "Επιφανειακή Αποτύπωση":
-            # --- This option is removed from the sidebar, but as a fallback: ---
             st.warning("Η ενότητα 'Επιφανειακή Αποτύπωση' έχει αφαιρεθεί.")
             st.info("Παρακαλώ επιλέξτε μια άλλη 'Είδος Ανάλυσης' από την πλαϊνή μπάρα.")
-        # --- END OF MODIFICATION ---
         elif selected_an == "Προφίλ ποιότητας και στάθμης":
             run_water_quality_dashboard(selected_wb, selected_idx)
         elif selected_an == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
             run_predictive_tools(selected_wb, selected_idx)
+        else: # Should not happen if sidebar is updated correctly
+             st.warning("Παρακαλώ επιλέξτε ένα έγκυρο είδος ανάλυσης από την πλαϊνή μπάρα.")
     else:
         st.warning(f"Δεν υπάρχουν διαθέσιμες αναλύσεις ή δεδομένα για τον συνδυασμό: "
                     f"Υδάτινο Σώμα '{selected_wb}' και Δείκτης '{selected_idx}'. "
