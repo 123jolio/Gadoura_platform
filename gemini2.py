@@ -38,9 +38,9 @@ st.set_page_config(layout="wide", page_title="Ανάλυση Ποιότητας 
 # --- AUTHENTICATION SETUP ---
 
 # --- STEP 2: Define your users and their credentials ---
-names = ["Ilioumbas User"]  # Display name for your user
-usernames = ["ilioumbas"]   # Username for login
-plain_text_passwords = ["123"] # <--- YOUR SINGLE PLAIN TEXT PASSWORD FOR 'ilioumbas'
+names = ["Rhodes User"]  # Display name for your user
+usernames = ["Rhodes"]   # Username for login
+plain_text_passwords = ["123"] # <--- YOUR SINGLE PLAIN TEXT PASSWORD FOR 'Rhodes'
 
 # --- STEP 3 (Τροποποιημένο): Create credentials dictionary using PLAIN TEXT passwords ---
 credentials = {"usernames": {}}
