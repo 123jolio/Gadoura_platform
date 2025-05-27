@@ -695,10 +695,17 @@ def run_lake_processing_app(waterbody: str, index_name: str):
         input_folder_geotiffs = os.path.join(data_folder, "GeoTIFFs")
         
         with st.spinner(f"Φόρτωση δεδομένων για {waterbody} - {index_name}..."):
-            STACK, DAYS, DATES, _ = load_data_for_lake_processing(input_folder_geotiffs)
-
-        if STACK is None or not DATES:
-            st.markdown('</div>', unsafe_allow_html=True); return
+            images_list, DAYS, DATES, _ = load_data_for_lake_processing(input_folder_geotiffs)
+            if images_list is None or not DATES:
+                st.markdown('</div>', unsafe_allow_html=True); return
+            
+            # Convert list of images to numpy array
+            try:
+                STACK = np.stack(images_list, axis=0)
+                debug_message(f"DEBUG: Μετατροπή λίστας εικόνων σε numpy array: {STACK.shape}")
+            except Exception as e:
+                st.error(f"Σφάλμα μετατροπής εικόνων σε numpy array: {e}")
+                return
 
         st.sidebar.subheader(f"Φίλτρα Επεξεργασίας ({index_name})") # Simplified title
         min_avail_date = min(DATES).date() if DATES else date.today()
