@@ -38,6 +38,28 @@ def debug(*args, **kwargs):
         st.write(*args, **kwargs)
 
 # -------------------------------------------------------------------------
+# Συνάρτηση Ελέγχου Πιστοποίησης
+# -------------------------------------------------------------------------
+def check_credentials():
+    """Ελέγχει τα διαπιστευτήρια του χρήστη."""
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.sidebar.title("Login")
+        username = st.sidebar.text_input("Username", key="username_input")
+        password = st.sidebar.text_input("Password", type="password", key="password_input")
+
+        if st.sidebar.button("Login"):
+            if username == "Rhodes" and password == "123":
+                st.session_state.authenticated = True
+                st.rerun() # Rerun to hide login and show app
+            else:
+                st.sidebar.error("Incorrect username or password")
+        return False
+    return True
+
+# -------------------------------------------------------------------------
 # Διαμόρφωση σελίδας Streamlit
 # -------------------------------------------------------------------------
 st.set_page_config(
@@ -115,8 +137,6 @@ def inject_custom_css():
     """
     st.markdown(custom_css, unsafe_allow_html=True)
 
-inject_custom_css()
-
 # -----------------------------------------------------------------------------
 # Helper Function: Create Chlorophyll‑a Legend Figure
 # -----------------------------------------------------------------------------
@@ -130,8 +150,8 @@ def create_chl_legend_figure():
     """
     levels = [0, 6, 12, 20, 30, 50]
     colors = ["#496FF2", "#82D35F", "#FEFD05", "#FD0004", "#8E2026", "#D97CF5"]
-    cmap = mcolors.LinearSegmentedColormap.from_list("ChlLegend", 
-                                                      list(zip(np.linspace(0, 1, len(levels)), colors)))
+    cmap = mcolors.LinearSegmentedColormap.from_list("ChlLegend",
+                                                     list(zip(np.linspace(0, 1, len(levels)), colors)))
     norm = mcolors.Normalize(vmin=levels[0], vmax=levels[-1])
     fig, ax = plt.subplots(figsize=(6, 1.5))
     fig.subplots_adjust(bottom=0.5)
@@ -403,7 +423,7 @@ def run_lake_processing_app(waterbody: str, index: str):
 
         start_dt, end_dt = refined_date_range
         selected_indices = [i for i, d in enumerate(DATES)
-                            if start_dt <= d <= end_dt and d.month in selected_months and d.year in selected_years]
+                             if start_dt <= d <= end_dt and d.month in selected_months and d.year in selected_years]
 
         if not selected_indices:
             st.error("Δεν υπάρχουν δεδομένα για την επιλεγμένη περίοδο/μήνες/έτη.")
@@ -457,8 +477,8 @@ def run_lake_processing_app(waterbody: str, index: str):
             avg_min, avg_max = 0, 0
 
         fig_sample = px.imshow(average_sample_img, color_continuous_scale="jet",
-                               range_color=[avg_min, avg_max],
-                               title="Διάγραμμα: Μέσο Δείγμα Εικόνας", labels={"color": "Τιμή Pixel"})
+                                 range_color=[avg_min, avg_max],
+                                 title="Διάγραμμα: Μέσο Δείγμα Εικόνας", labels={"color": "Τιμή Pixel"})
         fig_sample.update_layout(width=800, height=600)
         st.plotly_chart(fig_sample, use_container_width=True, key="fig_sample")
         with st.expander("Επεξήγηση: Μέσο Δείγμα Εικόνας"):
@@ -968,185 +988,185 @@ def run_water_quality_dashboard(waterbody: str, index: str):
                             st.plotly_chart(fig_detail, use_container_width=True, key="default_fig_detail")
                         else:
                             st.info("Δεν υπάρχουν δεδομένα mg για αυτό το σημείο.")
-    # Καρτέλα 2 (Upload Sampling)
-    with sampling_tabs[1]:
-        st.header("Ανάλυση για ανεβασμένη δειγματοληψία")
-        uploaded_file = st.file_uploader(
-            "Ανεβάστε αρχείο KML για νέα σημεία δειγματοληψίας",
-            type="kml",
-            key="upload_kml"
-        )
-        if uploaded_file is not None:
-            try:
-                new_sampling_points = parse_sampling_kml(uploaded_file)
-            except Exception as e:
-                st.error(f"Σφάλμα επεξεργασίας ανεβασμένου αρχείου: {e}")
-                new_sampling_points = []
-            point_names = [name for name, _, _ in new_sampling_points]
-            selected_points = st.multiselect(
-                "Επιλέξτε σημεία για ανάλυση mg/m³",
-                options=point_names,
-                default=point_names,
-                key="upload_points"
+        # Καρτέλα 2 (Upload Sampling)
+        with sampling_tabs[1]:
+            st.header("Ανάλυση για ανεβασμένη δειγματοληψία")
+            uploaded_file = st.file_uploader(
+                "Ανεβάστε αρχείο KML για νέα σημεία δειγματοληψίας",
+                type="kml",
+                key="upload_kml"
             )
-            if st.button("Εκτέλεση Ανάλυσης (Upload)", key="upload_run"):
-                with st.spinner("Εκτέλεση ανάλυσης..."):
-                    st.session_state.upload_results = analyze_sampling(
-                        new_sampling_points,
-                        first_image_data,
-                        first_transform,
-                        images_folder,
-                        lake_height_path,
-                        selected_points
-                    )
-            if st.session_state.upload_results is not None:
-                results = st.session_state.upload_results
-                if isinstance(results, tuple) and len(results) == 7:
-                    fig_geo, fig_dual, fig_colors, fig_mg, results_colors, results_mg, lake_data = results
-                else:
-                    st.error(
-                        "Σφάλμα μορφοποίησης αποτελεσμάτων ανάλυσης (Upload). "
-                        "Παρακαλώ επαναλάβετε."
-                    )
-                    st.stop()
-
-                nested_tabs = st.tabs([
-                    "GeoTIFF", "Επιλογή εικόνων", "Video/GIF",
-                    "Χρώματα Pixel", "Μέσο mg",
-                    "Διπλά Διαγράμματα", "Λεπτομερής ανάλυση mg"
-                ])
-
-                with nested_tabs[0]:
-                    st.plotly_chart(fig_geo, use_container_width=True, key="upload_fig_geo")
-                    # legend μόνο για Χλωροφύλλη
-                    if index == "Χλωροφύλλη":
-                        st.markdown("### Legend for Chlorophyll-a")
-                        legend_fig = create_chl_legend_figure()
-                        st.pyplot(legend_fig)
-
-                with nested_tabs[1]:
-                    st.header("Επιλογή εικόνων")
-                    tif_files = [
-                        f for f in os.listdir(images_folder)
-                        if f.lower().endswith('.tif')
-                    ]
-                    available_dates = {}
-                    for filename in tif_files:
-                        match = re.search(r'(\d{4}_\d{2}_\d{2})', filename)
-                        if match:
-                            date_str = match.group(1)
-                            try:
-                                date_obj = datetime.strptime(date_str, '%Y_%m_%d').date()
-                                available_dates[str(date_obj)] = filename
-                            except Exception:
-                                continue
-
-                    if available_dates:
-                        sorted_dates = sorted(available_dates.keys())
-                        if 'current_upload_image_index' not in st.session_state:
-                            st.session_state.current_upload_image_index = 0
-                        col_prev, col_select, col_next = st.columns([1, 3, 1])
-                        with col_prev:
-                            if st.button("<< Previous", key="upload_prev"):
-                                st.session_state.current_upload_image_index = max(
-                                    0, st.session_state.current_upload_image_index - 1
-                                )
-                        with col_next:
-                            if st.button("Next >>", key="upload_next"):
-                                st.session_state.current_upload_image_index = min(
-                                    len(sorted_dates) - 1,
-                                    st.session_state.current_upload_image_index + 1
-                                )
-                        with col_select:
-                            selected_date = st.selectbox(
-                                "Select date",
-                                sorted_dates,
-                                index=st.session_state.current_upload_image_index,
-                                key="upload_select_date"
-                            )
-                            st.session_state.current_upload_image_index = (
-                                sorted_dates.index(selected_date)
-                            )
-                        current_date = sorted_dates[st.session_state.current_upload_image_index]
-                        st.write(f"Selected Date: {current_date}")
-                        image_filename = available_dates[current_date]
-                        image_path = os.path.join(images_folder, image_filename)
-                        if os.path.exists(image_path):
-                            st.image(image_path, caption=f"Image for {current_date}", use_column_width=True)
-                        else:
-                            st.error("Image not found.")
+            if uploaded_file is not None:
+                try:
+                    new_sampling_points = parse_sampling_kml(uploaded_file)
+                except Exception as e:
+                    st.error(f"Σφάλμα επεξεργασίας ανεβασμένου αρχείου: {e}")
+                    new_sampling_points = []
+                point_names = [name for name, _, _ in new_sampling_points]
+                selected_points = st.multiselect(
+                    "Επιλέξτε σημεία για ανάλυση mg/m³",
+                    options=point_names,
+                    default=point_names,
+                    key="upload_points"
+                )
+                if st.button("Εκτέλεση Ανάλυσης (Upload)", key="upload_run"):
+                    with st.spinner("Εκτέλεση ανάλυσης..."):
+                        st.session_state.upload_results = analyze_sampling(
+                            new_sampling_points,
+                            first_image_data,
+                            first_transform,
+                            images_folder,
+                            lake_height_path,
+                            selected_points
+                        )
+                if st.session_state.upload_results is not None:
+                    results = st.session_state.upload_results
+                    if isinstance(results, tuple) and len(results) == 7:
+                        fig_geo, fig_dual, fig_colors, fig_mg, results_colors, results_mg, lake_data = results
                     else:
-                        st.info("No images found with a date in the folder.")
+                        st.error(
+                            "Σφάλμα μορφοποίησης αποτελεσμάτων ανάλυσης (Upload). "
+                            "Παρακαλώ επαναλάβετε."
+                        )
+                        st.stop()
 
-                    # legend μόνο για Χλωροφύλλη
-                    if index == "Χλωροφύλλη":
-                        st.markdown("### Legend for Chlorophyll-a")
-                        legend_fig = create_chl_legend_figure()
-                        st.pyplot(legend_fig)
+                    nested_tabs = st.tabs([
+                        "GeoTIFF", "Επιλογή εικόνων", "Video/GIF",
+                        "Χρώματα Pixel", "Μέσο mg",
+                        "Διπλά Διαγράμματα", "Λεπτομερής ανάλυση mg"
+                    ])
 
-                with nested_tabs[2]:
-                    if video_path is not None:
-                        if video_path.endswith(".mp4"):
-                            st.video(video_path, key="upload_video")
+                    with nested_tabs[0]:
+                        st.plotly_chart(fig_geo, use_container_width=True, key="upload_fig_geo")
+                        # legend μόνο για Χλωροφύλλη
+                        if index == "Χλωροφύλλη":
+                            st.markdown("### Legend for Chlorophyll-a")
+                            legend_fig = create_chl_legend_figure()
+                            st.pyplot(legend_fig)
+
+                    with nested_tabs[1]:
+                        st.header("Επιλογή εικόνων")
+                        tif_files = [
+                            f for f in os.listdir(images_folder)
+                            if f.lower().endswith('.tif')
+                        ]
+                        available_dates = {}
+                        for filename in tif_files:
+                            match = re.search(r'(\d{4}_\d{2}_\d{2})', filename)
+                            if match:
+                                date_str = match.group(1)
+                                try:
+                                    date_obj = datetime.strptime(date_str, '%Y_%m_%d').date()
+                                    available_dates[str(date_obj)] = filename
+                                except Exception:
+                                    continue
+
+                        if available_dates:
+                            sorted_dates = sorted(available_dates.keys())
+                            if 'current_upload_image_index' not in st.session_state:
+                                st.session_state.current_upload_image_index = 0
+                            col_prev, col_select, col_next = st.columns([1, 3, 1])
+                            with col_prev:
+                                if st.button("<< Previous", key="upload_prev"):
+                                    st.session_state.current_upload_image_index = max(
+                                        0, st.session_state.current_upload_image_index - 1
+                                    )
+                            with col_next:
+                                if st.button("Next >>", key="upload_next"):
+                                    st.session_state.current_upload_image_index = min(
+                                        len(sorted_dates) - 1,
+                                        st.session_state.current_upload_image_index + 1
+                                    )
+                            with col_select:
+                                selected_date = st.selectbox(
+                                    "Select date",
+                                    sorted_dates,
+                                    index=st.session_state.current_upload_image_index,
+                                    key="upload_select_date"
+                                )
+                                st.session_state.current_upload_image_index = (
+                                    sorted_dates.index(selected_date)
+                                )
+                            current_date = sorted_dates[st.session_state.current_upload_image_index]
+                            st.write(f"Selected Date: {current_date}")
+                            image_filename = available_dates[current_date]
+                            image_path = os.path.join(images_folder, image_filename)
+                            if os.path.exists(image_path):
+                                st.image(image_path, caption=f"Image for {current_date}", use_column_width=True)
+                            else:
+                                st.error("Image not found.")
                         else:
-                            st.image(video_path)
-                    else:
-                        st.info("Δεν βρέθηκε αρχείο Video/GIF.")
-                    # legend μόνο για Χλωροφύλλη
-                    if index == "Χλωροφύλλη":
-                        st.markdown("### Legend for Chlorophyll-a")
-                        legend_fig = create_chl_legend_figure()
-                        st.pyplot(legend_fig)
+                            st.info("No images found with a date in the folder.")
 
-                with nested_tabs[3]:
-                    st.plotly_chart(fig_colors, use_container_width=True, key="upload_fig_colors")
-                    # legend μόνο για Χλωροφύλλη
-                    if index == "Χλωροφύλλη":
-                        st.markdown("### Legend for Chlorophyll-a")
-                        legend_fig = create_chl_legend_figure()
-                        st.pyplot(legend_fig)
+                        # legend μόνο για Χλωροφύλλη
+                        if index == "Χλωροφύλλη":
+                            st.markdown("### Legend for Chlorophyll-a")
+                            legend_fig = create_chl_legend_figure()
+                            st.pyplot(legend_fig)
 
-                with nested_tabs[4]:
-                    st.plotly_chart(fig_mg, use_container_width=True, key="upload_fig_mg")
-
-                with nested_tabs[5]:
-                    st.plotly_chart(fig_dual, use_container_width=True, key="upload_fig_dual")
-
-                with nested_tabs[6]:
-                    selected_detail_point = st.selectbox(
-                        "Επιλέξτε σημείο για λεπτομερή ανάλυση mg",
-                        options=list(results_mg.keys()),
-                        key="upload_detail"
-                    )
-                    if selected_detail_point:
-                        mg_data = results_mg[selected_detail_point]
-                        if mg_data:
-                            mg_data_sorted = sorted(mg_data, key=lambda x: x[0])
-                            dates_mg = [d for d, _ in mg_data_sorted]
-                            mg_values = [val for _, val in mg_data_sorted]
-                            detail_colors = [mg_to_color(val) for val in mg_values]
-                            fig_detail = go.Figure()
-                            fig_detail.add_trace(go.Scatter(
-                                x=dates_mg,
-                                y=mg_values,
-                                mode='lines+markers',
-                                marker=dict(color=detail_colors, size=10),
-                                line=dict(color="gray"),
-                                name=selected_detail_point
-                            ))
-                            fig_detail.update_layout(
-                                title=f"Λεπτομερής ανάλυση mg για {selected_detail_point}",
-                                xaxis_title="Ημερομηνία",
-                                yaxis_title="mg/m³"
-                            )
-                            st.plotly_chart(fig_detail, use_container_width=True, key="upload_fig_detail")
+                    with nested_tabs[2]:
+                        if video_path is not None:
+                            if video_path.endswith(".mp4"):
+                                st.video(video_path, key="upload_video")
+                            else:
+                                st.image(video_path)
                         else:
-                            st.info(
-                                "Δεν υπάρχουν δεδομένα mg για αυτό το σημείο.",
-                                key="upload_no_mg"
-                            )
-        else:
-            st.info("Παρακαλώ ανεβάστε ένα αρχείο KML για νέα σημεία δειγματοληψίας.")
+                            st.info("Δεν βρέθηκε αρχείο Video/GIF.")
+                        # legend μόνο για Χλωροφύλλη
+                        if index == "Χλωροφύλλη":
+                            st.markdown("### Legend for Chlorophyll-a")
+                            legend_fig = create_chl_legend_figure()
+                            st.pyplot(legend_fig)
+
+                    with nested_tabs[3]:
+                        st.plotly_chart(fig_colors, use_container_width=True, key="upload_fig_colors")
+                        # legend μόνο για Χλωροφύλλη
+                        if index == "Χλωροφύλλη":
+                            st.markdown("### Legend for Chlorophyll-a")
+                            legend_fig = create_chl_legend_figure()
+                            st.pyplot(legend_fig)
+
+                    with nested_tabs[4]:
+                        st.plotly_chart(fig_mg, use_container_width=True, key="upload_fig_mg")
+
+                    with nested_tabs[5]:
+                        st.plotly_chart(fig_dual, use_container_width=True, key="upload_fig_dual")
+
+                    with nested_tabs[6]:
+                        selected_detail_point = st.selectbox(
+                            "Επιλέξτε σημείο για λεπτομερή ανάλυση mg",
+                            options=list(results_mg.keys()),
+                            key="upload_detail"
+                        )
+                        if selected_detail_point:
+                            mg_data = results_mg[selected_detail_point]
+                            if mg_data:
+                                mg_data_sorted = sorted(mg_data, key=lambda x: x[0])
+                                dates_mg = [d for d, _ in mg_data_sorted]
+                                mg_values = [val for _, val in mg_data_sorted]
+                                detail_colors = [mg_to_color(val) for val in mg_values]
+                                fig_detail = go.Figure()
+                                fig_detail.add_trace(go.Scatter(
+                                    x=dates_mg,
+                                    y=mg_values,
+                                    mode='lines+markers',
+                                    marker=dict(color=detail_colors, size=10),
+                                    line=dict(color="gray"),
+                                    name=selected_detail_point
+                                ))
+                                fig_detail.update_layout(
+                                    title=f"Λεπτομερής ανάλυση mg για {selected_detail_point}",
+                                    xaxis_title="Ημερομηνία",
+                                    yaxis_title="mg/m³"
+                                )
+                                st.plotly_chart(fig_detail, use_container_width=True, key="upload_fig_detail")
+                            else:
+                                st.info(
+                                    "Δεν υπάρχουν δεδομένα mg για αυτό το σημείο.",
+                                    key="upload_no_mg"
+                                )
+            else:
+                st.info("Παρακαλώ ανεβάστε ένα αρχείο KML για νέα σημεία δειγματοληψίας.")
 
     st.info("Τέλος Πίνακα Ποιότητας Ύδατος.")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1187,6 +1207,13 @@ def run_pattern_analysis(waterbody: str, index: str):
 # -----------------------------------------------------------------------------
 def main():
     debug("DEBUG: Εισήχθη η main()")
+
+    # ----> ΠΡΟΣΘΗΚΗ: Έλεγχος Πιστοποίησης <----
+    if not check_credentials():
+        st.stop() # Σταματά την εκτέλεση αν ο χρήστης δεν είναι πιστοποιημένος
+
+    # ----> Ο υπόλοιπος κώδικας εκτελείται μόνο αν η πιστοποίηση είναι επιτυχής <----
+    inject_custom_css() # Apply CSS only after login
     run_intro_page()
     run_custom_ui()
     wb = st.session_state.get("waterbody_choice", None)
@@ -1199,7 +1226,7 @@ def main():
             run_lake_processing_app(wb, idx)
         elif analysis == "Προφίλ ποιότητας και στάθμης":
             run_water_quality_dashboard(wb, idx)
-        elif analysis == "εργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
+        elif analysis == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης": # Διόρθωση ορθογραφίας
             run_water_level_profiles(wb, idx)
         else:
             st.info("Παρακαλώ επιλέξτε ένα είδος ανάλυσης.")
