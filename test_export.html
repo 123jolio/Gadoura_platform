@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Lake Height Data Export</title>
+    <script>
+        // Sample test data
+        const testData = [
+            { date: '2023-01-01', elevation: 100.5, area: 5000000 },
+            { date: '2023-02-01', elevation: 101.2, area: 5200000 },
+            { date: '2023-03-01', elevation: 100.8, area: 5100000 }
+        ];
+
+        // Function to test
+        function exportLakeHeightData(timeSeriesData) {
+            try {
+                // Create CSV content
+                var csvContent = 'Date,Water_Level_m,Water_Area_km2\n';
+                
+                // Process data for CSV
+                for (var i = 0; i < timeSeriesData.length; i++) {
+                    var point = timeSeriesData[i];
+                    var areaKm2 = point.area ? (point.area / 1000000).toFixed(6) : '';
+                    var level = point.elevation ? point.elevation.toFixed(6) : '';
+                    csvContent += point.date + ',' + level + ',' + areaKm2 + '\n';
+                }
+                
+                // Create a Blob with the CSV content
+                var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                var url = URL.createObjectURL(blob);
+                
+                // Create a download link and trigger it
+                var link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'lake_height_data_' + new Date().toISOString().slice(0, 10) + '.csv');
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                console.log('=== LAKE HEIGHT DATA EXPORT ===');
+                console.log('Number of observations: ' + timeSeriesData.length);
+                console.log('CSV file download started. If it doesn\'t start automatically, ' +
+                          'check your browser\'s download settings.');
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Error in exportLakeHeightData:', error);
+                return false;
+            }
+        }
+
+        // Run test when page loads
+        window.onload = function() {
+            const testResults = document.getElementById('testResults');
+            
+            // Test 1: Basic functionality
+            testResults.innerHTML += '<h3>Test 1: Basic Functionality</h3>';
+            const result1 = exportLakeHeightData(testData);
+            testResults.innerHTML += `<p>Test 1 ${result1 ? 'PASSED' : 'FAILED'}: Basic export with valid data</p>`;
+            
+            // Test 2: Empty data
+            testResults.innerHTML += '<h3>Test 2: Empty Data</h3>';
+            const result2 = exportLakeHeightData([]);
+            testResults.innerHTML += `<p>Test 2 ${result2 ? 'PASSED' : 'FAILED'}: Export with empty array (should create headers only)</p>`;
+            
+            // Test 3: Missing fields
+            testResults.innerHTML += '<h3>Test 3: Missing Fields</h3>';
+            const testDataMissingFields = [
+                { date: '2023-04-01' }, // Missing elevation and area
+                { elevation: 102.0 },    // Missing date and area
+                { area: 5300000 }        // Missing date and elevation
+            ];
+            const result3 = exportLakeHeightData(testDataMissingFields);
+            testResults.innerHTML += `<p>Test 3 ${result3 ? 'PASSED' : 'FAILED'}: Export with missing fields</p>`;
+            
+            // Test 4: Invalid data types
+            testResults.innerHTML += '<h3>Test 4: Invalid Data Types</h3>';
+            const testDataInvalidTypes = [
+                { date: 123, elevation: 'not a number', area: 'invalid' },
+                { date: '2023-05-01', elevation: '100.5', area: '5000000' }
+            ];
+            const result4 = exportLakeHeightData(testDataInvalidTypes);
+            testResults.innerHTML += `<p>Test 4 ${result4 ? 'PASSED' : 'FAILED'}: Export with invalid data types</p>`;
+            
+            // Test 5: Large dataset
+            testResults.innerHTML += '<h3>Test 5: Large Dataset</h3>';
+            const largeDataset = [];
+            for (let i = 0; i < 1000; i++) {
+                largeDataset.push({
+                    date: `2023-${String(i%12 + 1).padStart(2, '0')}-01`,
+                    elevation: 100 + Math.random() * 10,
+                    area: 5000000 + Math.random() * 1000000
+                });
+            }
+            const result5 = exportLakeHeightData(largeDataset);
+            testResults.innerHTML += `<p>Test 5 ${result5 ? 'PASSED' : 'FAILED'}: Export with 1000 records</p>`;
+        };
+    </script>
+</head>
+<body>
+    <h1>Lake Height Data Export Test</h1>
+    <p>This page will automatically run tests for the exportLakeHeightData function.</p>
+    <p>Check your browser's download folder for the exported CSV files.</p>
+    <div id="testResults">
+        <h2>Test Results</h2>
+        <p>Running tests... (check console for detailed logs)</p>
+    </div>
+</body>
+</html>
