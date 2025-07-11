@@ -1086,7 +1086,7 @@ def run_water_quality_dashboard(waterbody: str, index_name: str):
                     with n_tabs_def_display[2]:
                         if vid_path:
                             if vid_path.endswith(".mp4"): st.video(vid_path, key=f"video_def_tab_{tab_prefix_key}")
-                            else: st.image(vid_path, key=f"image_def_tab_{tab_prefix_key}")
+                            else: st.image(vid_path)
                             if index_name=="Χλωροφύλλη":
                                 try:
                                     theme_bg = st.get_option("theme.backgroundColor")
