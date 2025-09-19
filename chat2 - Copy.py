@@ -118,7 +118,7 @@ except Exception as e:
 
 
 # --- Global Configuration & Constants ---
-DEBUG = False
+DEBUG = True
 APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
 LOGO_PATH = os.path.join(APP_BASE_DIR, "logo.jpg")
 
@@ -283,26 +283,8 @@ def run_custom_sidebar_ui_custom():
         authenticator.logout("Αποσύνδεση", "sidebar", key='unique_logout_button_key')
         st.sidebar.markdown("<hr>", unsafe_allow_html=True)
 
-    st.sidebar.markdown("<div class='nav-section'><h4>🛠️ Επιλογές Ανάλυσης</h4></div>", unsafe_allow_html=True)
-    st.sidebar.info("❔ Επιλέξτε τις ρυθμίσεις σας και προχωρήστε στα αποτελέσματα!")
-
-    waterbody_options = list(WATERBODY_FOLDERS.keys())
-    default_wb_idx = 0 if waterbody_options else None
-
-    waterbody = st.sidebar.selectbox("🌊 Υδάτινο σώμα", waterbody_options, index=default_wb_idx, key=SESSION_KEY_WATERBODY)
-    index_name = st.sidebar.selectbox("🔬 Δείκτης", ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"], key=SESSION_KEY_INDEX)
-    analysis_type = st.sidebar.selectbox( "📊 Είδος Ανάλυσης",
-        ["Προφίλ ποιότητας και στάθμης", "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης"], # Removed "Επιφανειακή Αποτύπωση"
-        key=SESSION_KEY_ANALYSIS
-    )
-    st.sidebar.markdown(
-        f"""<div style="padding: 0.7rem; background:#2c2f36; border-radius:8px; margin-top:1.2rem;">
-        <strong>🌊 Υδάτινο σώμα:</strong> {waterbody or "<i>-</i>"}<br>
-        <strong>🔬 Δείκτης:</strong> {index_name or "<i>-</i>"}<br>
-        <strong>📊 Ανάλυση:</strong> {analysis_type or "<i>-</i>"}
-        </div>""",
-        unsafe_allow_html=True
-    )
+    # Use the new dynamic UI function
+    run_custom_ui()
     st.sidebar.markdown("---")
 
 @st.cache_data
@@ -471,27 +453,110 @@ def create_chl_legend_figure(orientation="horizontal", theme_bg_color=None, them
     plt.tight_layout(pad=0.5)
     return fig
 
-@st.cache_data
-def get_data_folder(waterbody: str, index_name: str) -> str | None:
-    waterbody_folder_name = WATERBODY_FOLDERS.get(waterbody)
+def get_available_indices(waterbody: str) -> list:
+    """
+    Scans the data directory for a given waterbody to find available index folders.
+    Returns a sorted list of subdirectory names.
+    """
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        base_dir = os.getcwd()
+
+    waterbody_map = {"Γαδουρά": "Gadoura"}
+    waterbody_folder_name = waterbody_map.get(waterbody)
+
     if not waterbody_folder_name:
-        st.error(f"Δεν έχει οριστεί αντιστοίχιση φακέλου για το υδάτινο σώμα: '{waterbody}'.")
+        debug_message(f"DEBUG: No waterbody folder found for: {waterbody}")
+        return []
+
+    path_to_scan = os.path.join(base_dir, waterbody_folder_name)
+    debug_message(f"DEBUG: Scanning path: {path_to_scan}")
+
+    if not os.path.isdir(path_to_scan):
+        debug_message(f"DEBUG: Path is not a directory: {path_to_scan}")
+        return []
+
+    try:
+        # List all entries in the directory and filter for those that are subdirectories
+        all_entries = os.listdir(path_to_scan)
+        debug_message(f"DEBUG: All entries found: {all_entries}")
+        
+        indices = [name for name in all_entries
+                   if os.path.isdir(os.path.join(path_to_scan, name))]
+        debug_message(f"DEBUG: Directory entries found: {indices}")
+        
+        sorted_indices = sorted(indices)
+        debug_message(f"DEBUG: Sorted indices: {sorted_indices}")
+        
+        return sorted_indices
+    except OSError as e:
+        debug_message(f"DEBUG: OSError while scanning: {e}")
+        return []
+
+
+def run_custom_ui():
+    """Creates the sidebar for selecting waterbody, index, and analysis type."""
+    st.sidebar.markdown("**TEST: This is the new dynamic UI function!**", unsafe_allow_html=True)
+    st.sidebar.markdown("<div class='nav-section'><h4>Παραμετροποίηση Ανάλυσης</h4></div>", unsafe_allow_html=True)
+    waterbody = st.sidebar.selectbox("Επιλογή υδάτινου σώματος",
+        ["Γαδουρά"], key="waterbody_choice")
+
+    # Add refresh button
+    if st.sidebar.button("🔄 Ανανέωση Φακέλων", key="refresh_folders"):
+        st.rerun()
+
+    # --- DYNAMICALLY GET INDICES ---
+    available_indices = get_available_indices(waterbody)
+    debug_message(f"DEBUG: Retrieved available indices: {available_indices}")
+    if not available_indices:
+        st.sidebar.warning("No data folders found for the selected waterbody.")
+        # Use a placeholder to prevent errors
+        available_indices = ["Not Found"]
+
+    debug_message(f"DEBUG: Final indices for dropdown: {available_indices}")
+    st.sidebar.markdown(f"**TEST: Found {len(available_indices)} folders: {available_indices}**", unsafe_allow_html=True)
+    index = st.sidebar.selectbox("Επιλογή Δείκτη",
+        options=available_indices, key="index_choice")
+    # --- END OF DYNAMIC CHANGE ---
+
+    analysis = st.sidebar.selectbox("Είδος Ανάλυσης",
+        [
+            "Επιφανειακή Αποτύπωση",
+            "Προφίλ ποιότητας και στάθμης",
+            "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης"
+        ],
+        key="analysis_choice")
+    st.sidebar.markdown(f""" <div style="padding: 0.5rem; background:#262626; border-radius:5px; margin-top:1rem;"> <strong>Υδάτινο σώμα:</strong> {waterbody}<br> <strong>Δείκτης:</strong> {index}<br> <strong>Ανάλυση:</strong> {analysis} </div> """, unsafe_allow_html=True)
+
+
+def get_data_folder(waterbody: str, index: str) -> str:
+    """
+    Constructs the path to the correct data folder based on selections.
+    The 'index' parameter is now the actual folder name from the filesystem.
+    """
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        base_dir = os.getcwd()
+    debug_message("DEBUG: Τρέχων φάκελος:", base_dir)
+
+    waterbody_map = {
+        "Γαδουρά": "Gadoura"
+    }
+    waterbody_folder = waterbody_map.get(waterbody, None)
+
+    if waterbody_folder is None:
         return None
 
-    index_specific_folder = ""
-    if index_name == "Πραγματικό":
-        index_specific_folder = "Πραγματικό"
-    elif index_name == "Χλωροφύλλη":
-        index_specific_folder = "Chlorophyll"
-    elif index_name == "Θολότητα":
-        index_specific_folder = "Θολότητα"
-    else:
-        index_specific_folder = index_name # Fallback
+    # --- SIMPLIFIED LOGIC ---
+    # The 'index' variable is now the actual folder name, so we can join it directly.
+    data_folder = os.path.join(base_dir, waterbody_folder, index)
+    # --- END OF SIMPLIFICATION ---
 
-    data_folder = os.path.join(APP_BASE_DIR, waterbody_folder_name, index_specific_folder)
-    debug_message(f"DEBUG: Αναζήτηση φακέλου δεδομένων: {data_folder}")
-
-    if not os.path.exists(data_folder) or not os.path.isdir(data_folder):
+    debug_message("DEBUG: Ο φάκελος δεδομένων επιλύθηκε σε:", data_folder)
+    if not os.path.exists(data_folder):
+        st.error(f"Ο φάκελος δεν υπάρχει: {data_folder}")
         return None
     return data_folder
 
