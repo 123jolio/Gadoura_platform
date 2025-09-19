@@ -502,6 +502,45 @@ def get_data_folder(waterbody: str, index_name: str) -> str | None:
     return data_folder
 
 @st.cache_data
+def get_available_parameters(waterbody: str) -> list[str]:
+    """
+    Dynamically detects all available parameters (indices) for a given waterbody
+    by scanning the subfolders in the waterbody's data directory.
+    """
+    waterbody_folder_name = WATERBODY_FOLDERS.get(waterbody)
+    if not waterbody_folder_name:
+        debug_message(f"DEBUG: Δεν βρέθηκε αντιστοίχιση φακέλου για το υδάτινο σώμα: '{waterbody}'")
+        return []
+    
+    waterbody_path = os.path.join(APP_BASE_DIR, waterbody_folder_name)
+    debug_message(f"DEBUG: Αναζήτηση παραμέτρων στο φάκελο: {waterbody_path}")
+    
+    if not os.path.exists(waterbody_path) or not os.path.isdir(waterbody_path):
+        debug_message(f"DEBUG: Ο φάκελος του υδάτινου σώματος δεν υπάρχει: {waterbody_path}")
+        return []
+    
+    available_parameters = []
+    try:
+        # Scan all subdirectories in the waterbody folder
+        for item in os.listdir(waterbody_path):
+            item_path = os.path.join(waterbody_path, item)
+            # Check if it's a directory and contains data files (like .tif files)
+            if os.path.isdir(item_path):
+                # Check if the directory contains image files
+                tif_files = glob.glob(os.path.join(item_path, "*.tif"))
+                if tif_files:
+                    available_parameters.append(item)
+                    debug_message(f"DEBUG: Βρέθηκε παράμετρος '{item}' με {len(tif_files)} αρχεία .tif")
+    except Exception as e:
+        debug_message(f"DEBUG: Σφάλμα κατά τη σάρωση παραμέτρων: {e}")
+        return []
+    
+    # Sort parameters alphabetically for consistent ordering
+    available_parameters.sort()
+    debug_message(f"DEBUG: Διαθέσιμες παράμετροι: {available_parameters}")
+    return available_parameters
+
+@st.cache_data
 def extract_date_from_filename(filename: str) -> tuple[int | None, datetime | None]:
     basename = os.path.basename(filename)
     match = re.search(r'(\d{4})[_-]?(\d{2})[_-]?(\d{2})', basename)
