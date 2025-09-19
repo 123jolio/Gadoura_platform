@@ -126,9 +126,21 @@ WATERBODY_FOLDERS = {
     "Γαδουρά": "Gadoura",
 }
 
-SESSION_KEY_WATERBODY = "waterbody_choice_main"
-SESSION_KEY_INDEX = "index_choice_main"
-SESSION_KEY_ANALYSIS = "analysis_choice_main"
+# Parameter name mapping: Greek display name -> English folder name
+PARAMETER_MAPPING = {
+    "Πραγματικό": "Real",
+    "Χλωροφύλλη": "Chlorophyll", 
+    "Θολότητα": "Turbidity",
+    "BGR": "BGR",
+    "Chl-new": "Chl-new"
+}
+
+# Reverse mapping: English folder name -> Greek display name
+REVERSE_PARAMETER_MAPPING = {v: k for k, v in PARAMETER_MAPPING.items()}
+
+SESSION_KEY_WATERBODY = "selected_waterbody"
+SESSION_KEY_INDEX = "selected_index"
+SESSION_KEY_ANALYSIS = "selected_analysis"
 SESSION_KEY_DEFAULT_RESULTS_DASHBOARD = "dashboard_default_sampling_results"
 SESSION_KEY_UPLOAD_RESULTS_DASHBOARD = "dashboard_upload_sampling_results"
 SESSION_KEY_CURRENT_IMAGE_INDEX_DASH_DEF = "dash_def_current_image_idx"
@@ -292,19 +304,59 @@ def run_custom_sidebar_ui_custom():
     waterbody = st.sidebar.selectbox("🌊 Υδάτινο σώμα", waterbody_options, index=default_wb_idx, key=SESSION_KEY_WATERBODY)
     
     # Get available parameters dynamically
-    available_parameters = get_available_parameters(waterbody)
-    if not available_parameters:
+    available_parameters_english = get_available_parameters(waterbody)
+    if not available_parameters_english:
         st.sidebar.warning("Δεν βρέθηκαν διαθέσιμες παράμετροι για το επιλεγμένο υδάτινο σώμα.")
-        available_parameters = ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"]  # Fallback to default
+        available_parameters_english = ["Real", "Chlorophyll", "Turbidity"]  # Fallback to default English names
+    
+    # Convert English folder names to Greek display names for UI
+    available_parameters_display = []
+    for param in available_parameters_english:
+        if param in REVERSE_PARAMETER_MAPPING:
+            available_parameters_display.append(REVERSE_PARAMETER_MAPPING[param])
+        else:
+            available_parameters_display.append(param)  # Use as-is if no mapping exists
+    
+    available_parameters = available_parameters_display
     
     # Set default index based on available parameters
     default_index_idx = 0
     if SESSION_KEY_INDEX in st.session_state:
-        current_index = st.session_state[SESSION_KEY_INDEX]
-        if current_index in available_parameters:
-            default_index_idx = available_parameters.index(current_index)
+        current_index_english = st.session_state[SESSION_KEY_INDEX]
+        # Convert stored English name to display name for finding the index
+        current_index_display = REVERSE_PARAMETER_MAPPING.get(current_index_english, current_index_english)
+        if current_index_display in available_parameters:
+            default_index_idx = available_parameters.index(current_index_display)
     
-    index_name = st.sidebar.selectbox("🔬 Δείκτης", available_parameters, index=default_index_idx, key=SESSION_KEY_INDEX)
+    # Create a mapping from display names to English names for the selectbox
+    display_to_english_mapping = {}
+    for display_name in available_parameters:
+        english_name = PARAMETER_MAPPING.get(display_name, display_name)
+        display_to_english_mapping[display_name] = english_name
+    
+    # Custom selectbox that stores English names but displays Greek names
+    def on_index_change():
+        selected_display = st.session_state["_temp_index_display"]
+        selected_english = display_to_english_mapping[selected_display]
+        st.session_state[SESSION_KEY_INDEX] = selected_english
+    
+    # Use a temporary key for the display value
+    selected_display = st.sidebar.selectbox(
+        "🔬 Δείκτης", 
+        available_parameters, 
+        index=default_index_idx, 
+        key="_temp_index_display",
+        on_change=on_index_change
+    )
+    
+    # Set the initial English value in session state if not already set
+    if SESSION_KEY_INDEX not in st.session_state and available_parameters:
+        initial_english = display_to_english_mapping[available_parameters[default_index_idx]]
+        st.session_state[SESSION_KEY_INDEX] = initial_english
+    
+    # Get the current English name for display purposes
+    index_name_english = st.session_state.get(SESSION_KEY_INDEX, available_parameters_english[0] if available_parameters_english else "")
+    index_name = REVERSE_PARAMETER_MAPPING.get(index_name_english, index_name_english)
     analysis_type = st.sidebar.selectbox( "📊 Είδος Ανάλυσης",
         ["Προφίλ ποιότητας και στάθμης", "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης"], # Removed "Επιφανειακή Αποτύπωση"
         key=SESSION_KEY_ANALYSIS
@@ -526,8 +578,11 @@ def get_available_parameters(waterbody: str) -> list[str]:
             item_path = os.path.join(waterbody_path, item)
             # Check if it's a directory and contains data files (like .tif files)
             if os.path.isdir(item_path):
-                # Check if the directory contains image files
+                # Check if the directory contains image files (both directly and in GeoTIFFs subfolder)
                 tif_files = glob.glob(os.path.join(item_path, "*.tif"))
+                if not tif_files:
+                    # Look in GeoTIFFs subfolder
+                    tif_files = glob.glob(os.path.join(item_path, "GeoTIFFs", "*.tif"))
                 if tif_files:
                     available_parameters.append(item)
                     debug_message(f"DEBUG: Βρέθηκε παράμετρος '{item}' με {len(tif_files)} αρχεία .tif")
@@ -1393,8 +1448,10 @@ def main_app():
         elif selected_an == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
             run_predictive_tools(selected_wb, selected_idx)
     else:
+        # Convert English name back to Greek for the error message
+        selected_idx_display = REVERSE_PARAMETER_MAPPING.get(selected_idx, selected_idx)
         st.warning(f"Δεν υπάρχουν διαθέσιμες αναλύσεις ή δεδομένα για τον συνδυασμό: "
-                   f"Υδάτινο Σώμα '{selected_wb}' και Δείκτης '{selected_idx}'. "
+                   f"Υδάτινο Σώμα '{selected_wb}' και Δείκτης '{selected_idx_display}'. "
                    f"Παρακαλώ δοκιμάστε έναν άλλο συνδυασμό.")
 
     render_footer()
