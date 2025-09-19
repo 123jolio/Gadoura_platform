@@ -290,21 +290,7 @@ def run_custom_sidebar_ui_custom():
     default_wb_idx = 0 if waterbody_options else None
 
     waterbody = st.sidebar.selectbox("🌊 Υδάτινο σώμα", waterbody_options, index=default_wb_idx, key=SESSION_KEY_WATERBODY)
-    
-    # Get available parameters dynamically
-    available_parameters = get_available_parameters(waterbody)
-    if not available_parameters:
-        st.sidebar.warning("Δεν βρέθηκαν διαθέσιμες παράμετροι για το επιλεγμένο υδάτινο σώμα.")
-        available_parameters = ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"]  # Fallback to default
-    
-    # Set default index based on available parameters
-    default_index_idx = 0
-    if SESSION_KEY_INDEX in st.session_state:
-        current_index = st.session_state[SESSION_KEY_INDEX]
-        if current_index in available_parameters:
-            default_index_idx = available_parameters.index(current_index)
-    
-    index_name = st.sidebar.selectbox("🔬 Δείκτης", available_parameters, index=default_index_idx, key=SESSION_KEY_INDEX)
+    index_name = st.sidebar.selectbox("🔬 Δείκτης", ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"], key=SESSION_KEY_INDEX)
     analysis_type = st.sidebar.selectbox( "📊 Είδος Ανάλυσης",
         ["Προφίλ ποιότητας και στάθμης", "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης"], # Removed "Επιφανειακή Αποτύπωση"
         key=SESSION_KEY_ANALYSIS
@@ -492,9 +478,17 @@ def get_data_folder(waterbody: str, index_name: str) -> str | None:
         st.error(f"Δεν έχει οριστεί αντιστοίχιση φακέλου για το υδάτινο σώμα: '{waterbody}'.")
         return None
 
-    # Use the index_name directly as the folder name since we're now detecting parameters dynamically
-    # This eliminates the need for hardcoded Greek-to-English mappings
-    data_folder = os.path.join(APP_BASE_DIR, waterbody_folder_name, index_name)
+    index_specific_folder = ""
+    if index_name == "Πραγματικό":
+        index_specific_folder = "Πραγματικό"
+    elif index_name == "Χλωροφύλλη":
+        index_specific_folder = "Chlorophyll"
+    elif index_name == "Θολότητα":
+        index_specific_folder = "Θολότητα"
+    else:
+        index_specific_folder = index_name # Fallback
+
+    data_folder = os.path.join(APP_BASE_DIR, waterbody_folder_name, index_specific_folder)
     debug_message(f"DEBUG: Αναζήτηση φακέλου δεδομένων: {data_folder}")
 
     if not os.path.exists(data_folder) or not os.path.isdir(data_folder):
@@ -1025,15 +1019,7 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True) # Changed from custom-card to card
         st.header(f"Εργαλεία Πρόβλεψης & Έγκαιρης Ενημέρωσης: {waterbody}")
-        # Get all available parameters dynamically for parallel analysis
-        available_parameters = get_available_parameters(waterbody)
-        if not available_parameters:
-            st.error("Δεν βρέθηκαν διαθέσιμες παράμετροι για παράλληλη ανάλυση.")
-            st.markdown('</div>', unsafe_allow_html=True)
-            return
-        
-        parameters_display = ", ".join(available_parameters)
-        st.markdown(f"Παράλληλη Ανάλυση για Δείκτες: **{parameters_display}**")
+        st.markdown(f"Παράλληλη Ανάλυση για Δείκτες: **Πραγματικό, Χλωροφύλλη, Θολότητα**")
 
         clean_initial_index_name = re.sub(r'[^a-zA-Z0-9_]', '', initial_selected_index)
         key_suffix_pred_section = f"_pred_tool_{waterbody}_{clean_initial_index_name}"
@@ -1078,8 +1064,7 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
             )
 
         if st.button("Εκτέλεση Παράλληλης Ανάλυσης & Εμφάνιση Αποτελεσμάτων", key=f"recalc_parallel{key_suffix_pred_section}", type="primary", use_container_width=True):
-            # Use all available parameters for parallel analysis
-            indices_to_analyze = available_parameters
+            indices_to_analyze = ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"]
             analysis_results_all_indices = {}
 
             sampling_points_to_use_for_analysis = None
@@ -1197,8 +1182,7 @@ def run_predictive_tools(waterbody: str, initial_selected_index: str):
             analysis_results = st.session_state[f"predictive_tool_results{key_suffix_pred_section}"]
             charts_to_show = st.session_state.get(f"predictive_tool_selected_charts{key_suffix_pred_section}", [])
             current_sampling_points_pred = st.session_state.get(f"predictive_tool_sampling_points{key_suffix_pred_section}", [])
-            # Use the same available parameters for results display
-            indices_to_analyze = available_parameters
+            indices_to_analyze = ["Πραγματικό", "Χλωροφύλλη", "Θολότητα"] # Define again for this block
 
             st.markdown("---")
             st.subheader("Αποτελέσματα Παράλληλης Ανάλυσης")
@@ -1346,9 +1330,7 @@ def main_app():
         render_footer()
         return
 
-    # Check if the selected index is available for the selected waterbody
-    available_params_for_wb = get_available_parameters(selected_wb)
-    if selected_wb == "Γαδουρά" and selected_idx in available_params_for_wb:
+    if selected_wb == "Γαδουρά" and selected_idx in ["Χλωροφύλλη", "Πραγματικό", "Θολότητα"]:
         if selected_an == "Προφίλ ποιότητας και στάθμης":
             run_water_quality_dashboard(selected_wb, selected_idx)
         elif selected_an == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
