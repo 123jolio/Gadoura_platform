@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import openpyxl
@@ -426,7 +426,7 @@ def render_level_tab() -> None:
     val_lbl = lvl["col"].iloc[0] if "col" in lvl.columns else "Στάθμη (m)"
     dfp = lvl[["date", "value"]].copy()
 
-    c1, c2, c3 = st.columns([2, 1, 1])
+    c1, c2, c3 = (st.columns(1) + st.columns(2)) if _is_mobile else st.columns([2, 1, 1])
     with c1:
         drng = st.date_input(
             "Εύρος ημερομηνιών",
@@ -452,7 +452,7 @@ def render_level_tab() -> None:
 
     dfp["display"] = dfp["value"].rolling(smooth, min_periods=1).mean()
 
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3, m4 = (st.columns(2) + st.columns(2)) if _is_mobile else st.columns(4)
     m1.metric("Τελευταία", f"{dfp['value'].iloc[-1]:.2f} m")
     m2.metric("Μέγιστη", f"{dfp['value'].max():.2f} m")
     m3.metric("Ελάχιστη", f"{dfp['value'].min():.2f} m")
@@ -626,6 +626,7 @@ st.caption(f"Πηγή δεδομένων μετρήσεων πεδίου (Excel)
 # ── Dark theme CSS (matches streamlit_geotiff_map_1.py) ──────────────────────
 CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <style>
 :root{
   --bg:#060d18;--bg2:#0a1525;--sf:#0e1e30;--sf2:#122236;
@@ -689,14 +690,170 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 ::-webkit-scrollbar-thumb{background:#1a3d58;border-radius:3px;}
 ::-webkit-scrollbar-thumb:hover{background:#2a5472;}
 hr{border-color:var(--bdr)!important;}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — screens < 768px
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Layout ──────────────────────────────────────────────── */
+  .block-container {
+    padding-top: .8rem !important;
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+    padding-bottom: 5rem !important;
+  }
+
+  /* ── Header: stack logo above text on small screens ──────── */
+  .hcard {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    padding: 1.2rem 1.4rem !important;
+    border-radius: 14px !important;
+    margin-bottom: 1.2rem !important;
+  }
+  .hcard img { height: 44px !important; }
+  .hcard h1  { font-size: 1.1rem !important; }
+  .hcard .sub{ font-size: .65rem !important; }
+
+  /* ── Streamlit columns → stack vertically ────────────────── */
+  [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: .75rem !important;
+  }
+  [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  /* ── Metric cards ─────────────────────────────────────────── */
+  .metric-card {
+    padding: .9rem 1rem !important;
+    border-radius: 12px !important;
+  }
+  .metric-val { font-size: 1.5rem !important; }
+  .metric-label { font-size: .58rem !important; }
+
+  /* ── Buttons — bigger touch targets ──────────────────────── */
+  [data-testid="stButton"] > button {
+    min-height: 48px !important;
+    font-size: .78rem !important;
+    padding: .8rem 1rem !important;
+    border-radius: 10px !important;
+    width: 100% !important;
+  }
+
+  /* ── Tabs — scrollable on mobile ─────────────────────────── */
+  [data-testid="stTabs"] [role="tablist"] {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    padding-bottom: 2px !important;
+  }
+  [data-testid="stTabs"] [role="tablist"]::-webkit-scrollbar { display:none; }
+  [data-testid="stTabs"] [role="tab"] {
+    white-space: nowrap !important;
+    font-size: .65rem !important;
+    padding: .45rem .85rem !important;
+    min-width: fit-content !important;
+  }
+
+  /* ── Select boxes & inputs ────────────────────────────────── */
+  [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+  [data-testid="stDateInput"] input {
+    font-size: .85rem !important;
+    min-height: 44px !important;
+  }
+
+  /* ── Map — full width, reasonable height ──────────────────── */
+  .mapwrap { border-radius: 12px !important; }
+  [data-testid="stIFrame"] { min-height: 340px !important; }
+  iframe { min-height: 340px !important; }
+
+  /* ── Status strip ─────────────────────────────────────────── */
+  .sstrip {
+    font-size: .72rem !important;
+    padding: .4rem .75rem !important;
+  }
+
+  /* ── Section labels ───────────────────────────────────────── */
+  .slabel { font-size: .58rem !important; letter-spacing: .16em !important; }
+
+  /* ── Sidebar: auto-hides on mobile in Streamlit ──────────── */
+  [data-testid="stSidebar"] > div:first-child {
+    padding-top: 1rem !important;
+  }
+
+  /* ── Plotly charts ────────────────────────────────────────── */
+  [data-testid="stPlotlyChart"] { overflow-x: auto !important; }
+  [data-testid="stPlotlyChart"] > div { min-width: 0 !important; }
+
+  /* ── Caption/mono text ────────────────────────────────────── */
+  [data-testid="stCaptionContainer"] { font-size: .62rem !important; }
+
+  /* ── pydeck/folium map containers ────────────────────────── */
+  [data-testid="stDeckGlJsonChart"],
+  .stFolium { border-radius: 12px !important; overflow: hidden !important; }
+
+  /* ── Expander ─────────────────────────────────────────────── */
+  [data-testid="stExpander"] summary {
+    font-size: .75rem !important;
+    padding: .8rem !important;
+  }
+}
+
+/* ── Extra-small phones (< 420px) ──────────────────────────────── */
+@media (max-width: 420px) {
+  .hcard h1  { font-size: .95rem !important; }
+  .metric-val { font-size: 1.35rem !important; }
+  [data-testid="stTabs"] [role="tab"] {
+    font-size: .6rem !important;
+    padding: .4rem .7rem !important;
+  }
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
+# ── Mobile detection via JS ────────────────────────────────────────────────────
+_MOBILE_JS = """
+<script>
+(function() {
+    const w = window.innerWidth;
+    const mobile = w < 768;
+    // Send to Streamlit via URL param trick — use sessionStorage flag
+    if (mobile !== (sessionStorage.getItem('_st_mobile') === '1')) {
+        sessionStorage.setItem('_st_mobile', mobile ? '1' : '0');
+        // Set a cookie Streamlit can read via query params on reload
+        const url = new URL(window.location.href);
+        url.searchParams.set('_mobile', mobile ? '1' : '0');
+        window.location.replace(url.toString());
+    }
+})();
+</script>
+"""
+st.markdown(_MOBILE_JS, unsafe_allow_html=True)
+
+# Read mobile flag from query params (set by JS above)
+_qp = st.query_params
+_is_mobile = str(_qp.get("_mobile", "0")) == "1"
+
+def _cols(*desktop_spec):
+    """Return st.columns with mobile-aware spec.
+    On mobile, always returns a single column."""
+    if _is_mobile:
+        return st.columns(1)
+    return st.columns(list(desktop_spec) if len(desktop_spec) > 1 else desktop_spec[0])
+
+
+
 st.markdown("---")
 
 # ─── Summary metrics ───────────────────────────────────────────────────────────
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4 = (st.columns(2) + st.columns(2)) if _is_mobile else st.columns(4)
 dates = sorted(df["date"].unique())
 with col1:
     st.markdown(f"""<div class="metric-card"><div style="font-size:1.3rem;margin-bottom:.3rem">📅</div><div class="metric-val">{len(dates)}</div><div class="metric-label">Δειγματοληψίες</div></div>""", unsafe_allow_html=True)
@@ -1728,9 +1885,10 @@ def _run_lake_height_analysis(collection, polygon_geom, method: str, threshold: 
     return pd.DataFrame(rows).dropna(how="all").sort_values("date")
 
 
-tab_level, tab_map, tab_ts, tab_3d, tab_depth, tab_compare, tab_raw = st.tabs([
+tab_level, tab_map, tab_gee, tab_ts, tab_3d, tab_depth, tab_compare, tab_raw = st.tabs([
     "Στάθμη",
     "Map",
+    "GEE Explorer v4",
     "Time Series",
     "3D Maps",
     "Depth Profiles",
@@ -1786,7 +1944,7 @@ with tab_map:
     st.dataframe(table_view, use_container_width=True, hide_index=True)
 
 # TAB 2: GEE EXPLORER
-if False:
+with tab_gee:
     st.subheader("Interactive Water Quality Explorer (GEE v4)")
     st.caption(
         "Modes: ROI, Transect, Lake Height. Includes Gadouras calibrated chlorophyll models. "
@@ -2119,7 +2277,7 @@ if False:
 with tab_ts:
     st.subheader("Χρονοσειρές Παραμέτρων")
     
-    col_a, col_b, col_c = st.columns([2, 2, 2])
+    col_a, col_b, col_c = st.columns(1) if _is_mobile else st.columns([2, 2, 2])
     
     with col_a:
         param = st.selectbox(
@@ -2540,7 +2698,7 @@ with tab_3d:
     st.subheader("Unified 3D Georeferenced Map")
     st.caption(f"Data source path: `{MEASUREMENTS_SOURCE_PATH}`")
 
-    c3d_a, c3d_b, c3d_c = st.columns([2, 2, 2])
+    c3d_a, c3d_b, c3d_c = st.columns(1) if _is_mobile else st.columns([2, 2, 2])
     with c3d_a:
         param_3d = st.selectbox(
             "Παράμετρος 3D",

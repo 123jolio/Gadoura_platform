@@ -1,4 +1,4 @@
-﻿"""
+"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║  Πλατφόρμα Παρακολούθησης Ταμιευτήρα Γαδουρά  ·  ΕΥΑΘ ΑΕ      ║
 ╚══════════════════════════════════════════════════════════════════╝
@@ -126,218 +126,193 @@ CASE_DISPLAY_ORDER = [
 #  CSS
 # ══════════════════════════════════════════════════════════════════════════════
 CSS = """
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Noto+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <style>
-/* ─── Global ──────────────────────────────────────────────────────── */
-html, body, [data-testid="stApp"] {
-    background:#09111f !important;
-    color:#d0e8f5 !important;
-    font-family:'DM Sans',sans-serif !important;
+:root{
+  --bg:#060d18;--bg2:#0a1525;--sf:#0e1e30;--sf2:#122236;
+  --ac:#06d6f0;--acd:rgba(6,214,240,.12);--abdr:rgba(6,214,240,.22);
+  --tx:#dff2fa;--mid:#6ab4ce;--dim:#2e6480;--bdr:rgba(6,214,240,.13);
+  --sh:0 10px 52px rgba(0,0,0,.7);--r:16px;
+  --fh:'Bricolage Grotesque',sans-serif;
+  --fb:'Plus Jakarta Sans',sans-serif;
+  --fm:'JetBrains Mono',monospace;
 }
-#MainMenu, footer, header,[data-testid="stDecoration"]{display:none!important;}
-.block-container{
-    padding-top:1.2rem!important;
-    padding-bottom:4rem!important;
-    max-width:1440px!important;
+html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!important;font-family:var(--fb)!important;}
+[data-testid="stApp"]::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(6,214,240,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(6,214,240,.018) 1px,transparent 1px);background-size:56px 56px;}
+#MainMenu,footer,header,[data-testid="stDecoration"],[data-testid="stToolbar"]{display:none!important;}
+.block-container{padding-top:1.4rem!important;padding-bottom:5rem!important;max-width:1480px!important;position:relative;z-index:1;}
+
+.hcard{background:linear-gradient(140deg,#091726 0%,#0d2340 55%,#071520 100%);border:1px solid var(--abdr);border-top:2px solid rgba(6,214,240,.55);border-radius:var(--r);padding:1.6rem 2.5rem;margin-bottom:2rem;display:flex;align-items:center;gap:2.4rem;box-shadow:var(--sh),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden;}
+.hcard::before{content:'';position:absolute;top:-80px;right:-80px;width:260px;height:260px;background:radial-gradient(circle,rgba(6,214,240,.08) 0%,transparent 70%);pointer-events:none;}
+.hcard h1{font-family:var(--fh)!important;font-size:1.45rem!important;font-weight:700!important;color:#f0faff!important;margin:0 0 .35rem 0!important;line-height:1.3!important;letter-spacing:-.02em!important;}
+.hcard .sub{font-size:.72rem;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
+.badge{display:inline-flex;align-items:center;gap:.4rem;background:var(--acd);border:1px solid var(--abdr);color:var(--ac);border-radius:99px;padding:.22rem .9rem;font-family:var(--fh);font-size:.65rem;font-weight:600;letter-spacing:.05em;margin-top:.5rem;}
+
+.slabel{font-family:var(--fh);font-size:.6rem;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:.75rem;padding-left:.15rem;}
+
+[data-testid="stButton"]>button{background:var(--sf)!important;border:1px solid var(--bdr)!important;color:var(--mid)!important;border-radius:12px!important;font-family:var(--fh)!important;font-size:.75rem!important;font-weight:600!important;padding:.7rem 1rem!important;transition:all .18s ease!important;}
+[data-testid="stButton"]>button:hover{background:var(--sf2)!important;border-color:rgba(6,214,240,.5)!important;color:var(--tx)!important;transform:translateY(-1px)!important;box-shadow:0 6px 22px rgba(0,0,0,.45)!important;}
+[data-testid="stButton"]>button[kind="primary"]{background:linear-gradient(135deg,#073d60,#052e4a)!important;border-color:var(--ac)!important;color:#e0f8ff!important;box-shadow:0 0 24px rgba(6,214,240,.18)!important;}
+
+[data-testid="stDateInput"] label,[data-testid="stSlider"] label,[data-testid="stSelectbox"] label,[data-testid="stRadio"] label{font-family:var(--fh)!important;font-size:.62rem!important;letter-spacing:.13em!important;text-transform:uppercase!important;color:var(--dim)!important;font-weight:600!important;}
+[data-testid="stDateInput"] input{background:var(--bg2)!important;border:1px solid var(--bdr)!important;color:var(--mid)!important;border-radius:8px!important;font-family:var(--fm)!important;font-size:.8rem!important;}
+[data-testid="stSelectbox"] [data-baseweb="select"]>div{background:var(--bg2)!important;border-color:var(--bdr)!important;color:var(--mid)!important;border-radius:8px!important;}
+[data-baseweb="slider"] [role="slider"]{background:var(--ac)!important;box-shadow:0 0 0 3px rgba(6,214,240,.2)!important;}
+[data-baseweb="slider"]>div>div>div:first-child{background:var(--ac)!important;}
+
+.mapwrap{border:1px solid var(--abdr);border-top:2px solid rgba(6,214,240,.5);border-radius:var(--r);overflow:hidden;box-shadow:0 18px 70px rgba(0,0,0,.78),inset 0 1px 0 rgba(255,255,255,.03);margin-bottom:1.8rem;}
+
+.sstrip{display:flex;align-items:center;gap:.75rem;margin:.3rem 0 1.1rem;font-size:.77rem;color:var(--mid);font-family:var(--fb);background:var(--acd);border:1px solid var(--bdr);border-radius:10px;padding:.5rem 1rem;}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--ac);box-shadow:0 0 10px var(--ac);animation:_pulse 2.5s ease-in-out infinite;}
+@keyframes _pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.8);}}
+
+[data-testid="stMetric"]{background:linear-gradient(135deg,var(--sf),var(--bg2))!important;border:1px solid var(--bdr)!important;border-top:2px solid rgba(6,214,240,.3)!important;border-radius:14px!important;padding:1rem 1.2rem!important;}
+[data-testid="stMetricLabel"]{font-family:var(--fh)!important;font-size:.6rem!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--dim)!important;font-weight:600!important;}
+[data-testid="stMetricValue"]{font-family:var(--fh)!important;font-size:1.6rem!important;color:var(--ac)!important;font-weight:700!important;letter-spacing:-.02em!important;}
+
+.lcard{background:linear-gradient(135deg,var(--sf),var(--bg2));border:1px solid var(--bdr);border-top:2px solid rgba(6,214,240,.42);border-radius:var(--r);padding:1.6rem 2rem;margin-top:1.5rem;box-shadow:var(--sh);}
+.lcard-title{font-family:var(--fh);font-size:1.05rem;font-weight:700;color:var(--tx);margin:0 0 1.2rem;display:flex;align-items:center;gap:.6rem;letter-spacing:-.01em;}
+
+[data-testid="stTabs"] [role="tablist"]{border-bottom:1px solid var(--bdr)!important;gap:.2rem!important;}
+[data-testid="stTabs"] [role="tab"]{font-family:var(--fh)!important;font-size:.7rem!important;font-weight:600!important;letter-spacing:.07em!important;text-transform:uppercase!important;color:var(--dim)!important;padding:.5rem 1.1rem!important;border-radius:8px 8px 0 0!important;transition:all .15s!important;}
+[data-testid="stTabs"] [role="tab"]:hover{color:var(--mid)!important;}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"]{color:var(--ac)!important;border-bottom:2px solid var(--ac)!important;background:var(--acd)!important;}
+
+[data-testid="stExpander"]{background:var(--sf)!important;border:1px solid var(--bdr)!important;border-radius:12px!important;}
+[data-testid="stExpander"] summary{font-family:var(--fh)!important;font-size:.8rem!important;font-weight:600!important;color:var(--mid)!important;}
+
+[data-testid="stCaptionContainer"]{color:var(--dim)!important;font-size:.68rem!important;font-family:var(--fm)!important;}
+[data-testid="stInfo"]{background:rgba(6,214,240,.06)!important;border:1px solid rgba(6,214,240,.2)!important;border-radius:10px!important;color:var(--mid)!important;}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:#1a3d58;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#2a5472;}
+hr{border-color:var(--bdr)!important;}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — screens < 768px
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Layout ──────────────────────────────────────────────── */
+  .block-container {
+    padding-top: .8rem !important;
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+    padding-bottom: 5rem !important;
+  }
+
+  /* ── Header: stack logo above text on small screens ──────── */
+  .hcard {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    padding: 1.2rem 1.4rem !important;
+    border-radius: 14px !important;
+    margin-bottom: 1.2rem !important;
+  }
+  .hcard img { height: 44px !important; }
+  .hcard h1  { font-size: 1.1rem !important; }
+  .hcard .sub{ font-size: .65rem !important; }
+
+  /* ── Streamlit columns → stack vertically ────────────────── */
+  [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: .75rem !important;
+  }
+  [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  /* ── Metric cards ─────────────────────────────────────────── */
+  .metric-card {
+    padding: .9rem 1rem !important;
+    border-radius: 12px !important;
+  }
+  .metric-val { font-size: 1.5rem !important; }
+  .metric-label { font-size: .58rem !important; }
+
+  /* ── Buttons — bigger touch targets ──────────────────────── */
+  [data-testid="stButton"] > button {
+    min-height: 48px !important;
+    font-size: .78rem !important;
+    padding: .8rem 1rem !important;
+    border-radius: 10px !important;
+    width: 100% !important;
+  }
+
+  /* ── Tabs — scrollable on mobile ─────────────────────────── */
+  [data-testid="stTabs"] [role="tablist"] {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    padding-bottom: 2px !important;
+  }
+  [data-testid="stTabs"] [role="tablist"]::-webkit-scrollbar { display:none; }
+  [data-testid="stTabs"] [role="tab"] {
+    white-space: nowrap !important;
+    font-size: .65rem !important;
+    padding: .45rem .85rem !important;
+    min-width: fit-content !important;
+  }
+
+  /* ── Select boxes & inputs ────────────────────────────────── */
+  [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+  [data-testid="stDateInput"] input {
+    font-size: .85rem !important;
+    min-height: 44px !important;
+  }
+
+  /* ── Map — full width, reasonable height ──────────────────── */
+  .mapwrap { border-radius: 12px !important; }
+  [data-testid="stIFrame"] { min-height: 340px !important; }
+  iframe { min-height: 340px !important; }
+
+  /* ── Status strip ─────────────────────────────────────────── */
+  .sstrip {
+    font-size: .72rem !important;
+    padding: .4rem .75rem !important;
+  }
+
+  /* ── Section labels ───────────────────────────────────────── */
+  .slabel { font-size: .58rem !important; letter-spacing: .16em !important; }
+
+  /* ── Sidebar: auto-hides on mobile in Streamlit ──────────── */
+  [data-testid="stSidebar"] > div:first-child {
+    padding-top: 1rem !important;
+  }
+
+  /* ── Plotly charts ────────────────────────────────────────── */
+  [data-testid="stPlotlyChart"] { overflow-x: auto !important; }
+  [data-testid="stPlotlyChart"] > div { min-width: 0 !important; }
+
+  /* ── Caption/mono text ────────────────────────────────────── */
+  [data-testid="stCaptionContainer"] { font-size: .62rem !important; }
+
+  /* ── pydeck/folium map containers ────────────────────────── */
+  [data-testid="stDeckGlJsonChart"],
+  .stFolium { border-radius: 12px !important; overflow: hidden !important; }
+
+  /* ── Expander ─────────────────────────────────────────────── */
+  [data-testid="stExpander"] summary {
+    font-size: .75rem !important;
+    padding: .8rem !important;
+  }
 }
 
-/* ─── Header card ─────────────────────────────────────────────────── */
-.hcard{
-    background:linear-gradient(130deg,#0b1d36 0%,#0d2540 55%,#0a2235 100%);
-    border:1px solid rgba(56,189,248,.2);
-    border-radius:20px;
-    padding:1.5rem 2.2rem;
-    margin-bottom:1.8rem;
-    display:flex;
-    align-items:center;
-    gap:2rem;
-    box-shadow:0 6px 48px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);
-}
-.hcard h1{
-    font-family:'Noto Sans','DM Sans',sans-serif!important;
-    font-size:1.35rem!important;
-    font-weight:700!important;
-    color:#e8f4ff!important;
-    margin:0 0 .3rem 0!important;
-    line-height:1.4!important;
-    letter-spacing:.01em!important;
-    text-rendering:optimizeLegibility;
-}
-.hcard .sub{
-    font-size:.78rem;
-    color:#5a9dc0;
-    letter-spacing:.06em;
-    text-transform:uppercase;
-}
-.badge{
-    display:inline-block;
-    background:rgba(56,189,248,.1);
-    border:1px solid rgba(56,189,248,.3);
-    color:#38bdf8;
-    border-radius:99px;
-    padding:.15rem .75rem;
-    font-size:.68rem;
-    font-weight:700;
-    letter-spacing:.08em;
-    margin-top:.45rem;
-}
-
-/* ─── Section label ───────────────────────────────────────────────── */
-.slabel{
-    font-family:'Syne',sans-serif;
-    font-size:.63rem;
-    font-weight:700;
-    letter-spacing:.18em;
-    text-transform:uppercase;
-    color:#3d7898;
-    margin-bottom:.65rem;
-    padding-left:.1rem;
-}
-
-/* ─── Case buttons – we style the native st.button columns ───────── */
-[data-testid="stButton"]>button{
-    background:#0d1e32!important;
-    border:1px solid rgba(56,189,248,.18)!important;
-    color:#7ab3ce!important;
-    border-radius:14px!important;
-    font-family:'Syne',sans-serif!important;
-    font-size:.78rem!important;
-    font-weight:600!important;
-    letter-spacing:.03em!important;
-    padding:.65rem 1rem!important;
-    transition:all .2s ease!important;
-    line-height:1.35!important;
-}
-[data-testid="stButton"]>button:hover{
-    background:#142840!important;
-    border-color:rgba(56,189,248,.55)!important;
-    color:#cfe8f8!important;
-    transform:translateY(-2px)!important;
-    box-shadow:0 8px 24px rgba(0,0,0,.45)!important;
-}
-[data-testid="stButton"]>button[kind="primary"]{
-    background:linear-gradient(135deg,#0c3559,#0a2e4d)!important;
-    border-color:#38bdf8!important;
-    color:#e0f2fe!important;
-    box-shadow:0 0 20px rgba(56,189,248,.22),inset 0 1px 0 rgba(255,255,255,.07)!important;
-}
-
-/* ─── Control inputs ──────────────────────────────────────────────── */
-[data-testid="stDateInput"] label,
-[data-testid="stSlider"]    label,
-[data-testid="stSelectbox"] label{
-    font-size:.67rem!important;
-    letter-spacing:.1em!important;
-    text-transform:uppercase!important;
-    color:#355f7a!important;
-    font-weight:600!important;
-}
-[data-testid="stDateInput"] input{
-    background:#0b1827!important;
-    border:1px solid rgba(56,189,248,.22)!important;
-    color:#b8dff5!important;
-    border-radius:8px!important;
-}
-
-/* ─── Map wrapper ─────────────────────────────────────────────────── */
-.mapwrap{
-    border:1px solid rgba(56,189,248,.22);
-    border-top:2px solid rgba(56,189,248,.4);
-    border-radius:18px;
-    overflow:hidden;
-    box-shadow:0 12px 60px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.04);
-    margin-bottom:1.6rem;
-}
-
-/* ─── Status strip ────────────────────────────────────────────────── */
-.sstrip{
-    display:flex;
-    align-items:center;
-    gap:.7rem;
-    margin:.2rem 0 1rem;
-    font-size:.78rem;
-    color:#4a88a8;
-    background:rgba(56,189,248,.04);
-    border:1px solid rgba(56,189,248,.1);
-    border-radius:10px;
-    padding:.45rem .9rem;
-}
-.sdot{width:7px;height:7px;border-radius:50%;background:#38bdf8;box-shadow:0 0 9px #38bdf8;flex-shrink:0;animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
-
-/* ─── Metrics ─────────────────────────────────────────────────────── */
-[data-testid="stMetric"]{
-    background:#0d1e2f!important;
-    border:1px solid rgba(56,189,248,.12)!important;
-    border-radius:12px!important;
-    padding:.85rem 1.1rem!important;
-}
-[data-testid="stMetricLabel"]{
-    font-size:.65rem!important;
-    letter-spacing:.09em!important;
-    text-transform:uppercase!important;
-    color:#355f7a!important;
-}
-[data-testid="stMetricValue"]{
-    font-family:'Syne',sans-serif!important;
-    font-size:1.55rem!important;
-    color:#38bdf8!important;
-    font-weight:700!important;
-}
-
-/* ─── Level card ──────────────────────────────────────────────────── */
-.lcard{
-    background:linear-gradient(135deg,#0c1e30,#0a1c2c);
-    border:1px solid rgba(56,189,248,.15);
-    border-top:2px solid rgba(56,189,248,.35);
-    border-radius:18px;
-    padding:1.5rem 1.8rem 1.4rem;
-    margin-top:2rem;
-    box-shadow:0 8px 40px rgba(0,0,0,.45);
-}
-.lcard-title{
-    font-family:'Syne',sans-serif;
-    font-size:1rem;
-    font-weight:700;
-    color:#cfe8f8;
-    margin:0 0 1.1rem 0;
-    display:flex;
-    align-items:center;
-    gap:.6rem;
-}
-
-/* ─── Tabs ────────────────────────────────────────────────────────── */
-[data-testid="stTabs"] [role="tab"]{
-    font-family:'Syne',sans-serif!important;
-    font-size:.76rem!important;
-    letter-spacing:.05em!important;
-    color:#355f7a!important;
-}
-[data-testid="stTabs"] [role="tab"][aria-selected="true"]{
-    color:#38bdf8!important;
-    border-bottom-color:#38bdf8!important;
-}
-
-/* ─── Expander ────────────────────────────────────────────────────── */
-[data-testid="stExpander"]{
-    background:#0c1a29!important;
-    border:1px solid rgba(56,189,248,.1)!important;
-    border-radius:12px!important;
-}
-
-/* ─── Divider ─────────────────────────────────────────────────────── */
-hr{border-color:rgba(56,189,248,.1)!important;}
-
-/* ─── Scrollbar ───────────────────────────────────────────────────── */
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:#09111f;}
-::-webkit-scrollbar-thumb{background:#1a3a55;border-radius:3px;}
-[data-testid="stCaptionContainer"]{color:#2e5b78!important;font-size:.7rem!important;}
-[data-testid="stInfo"],[data-testid="stWarning"],[data-testid="stError"]{border-radius:10px!important;}
-[data-testid="stSelectbox"] [data-baseweb="select"]>div{
-    background:#0b1827!important;border-color:rgba(56,189,248,.22)!important;
-    color:#b8dff5!important;border-radius:8px!important;
+/* ── Extra-small phones (< 420px) ──────────────────────────────── */
+@media (max-width: 420px) {
+  .hcard h1  { font-size: .95rem !important; }
+  .metric-val { font-size: 1.35rem !important; }
+  [data-testid="stTabs"] [role="tab"] {
+    font-size: .6rem !important;
+    padding: .4rem .7rem !important;
+  }
 }
 </style>
 """
@@ -506,14 +481,15 @@ def load_level(root: str) -> pd.DataFrame:
 
 # ── Altair theme helper ────────────────────────────────────────────────────────
 _AX = dict(
-    labelColor="#5a8ba8", titleColor="#c8e4f4",
-    labelFontSize=11, titleFontSize=11,
-    gridColor="rgba(56,189,248,.07)", domainColor="rgba(56,189,248,.18)",
-    tickColor="rgba(56,189,248,.18)", tickSize=4,
+    labelColor="#5aa8c4", titleColor="#dff2fa",
+    labelFont="Plus Jakarta Sans, sans-serif", titleFont="Bricolage Grotesque, sans-serif",
+    labelFontSize=11, titleFontSize=11, titleFontWeight=600,
+    gridColor="rgba(6,214,240,.06)", domainColor="rgba(6,214,240,.18)",
+    tickColor="rgba(6,214,240,.18)", tickSize=4,
 )
 def _chart_cfg(c):
     return (c
-        .configure_view(fill="#09111f", stroke=None, continuousWidth=700, continuousHeight=300)
+        .configure_view(fill="#060d18", stroke=None, continuousWidth=700, continuousHeight=300)
         .configure_axis(**_AX)
         .configure_title(color="#c8e4f4", fontSize=13)
         .interactive()
@@ -536,7 +512,7 @@ def section_chlorophyll() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα.")
         else:
-            c1, c2 = st.columns(2)
+            c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
             sz = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4)
             op = c2.slider("Διαφάνεια κουκκίδας", .2, 1., .88, .02)
             plot = pts[pts["point"] >= 0].copy()
@@ -576,12 +552,12 @@ def section_chlorophyll() -> None:
             area = (
                 alt.Chart(avg)
                 .mark_area(
-                    line={"color":"#38bdf8","strokeWidth":2},
+                    line={"color":"#06d6f0","strokeWidth":2},
                     color=alt.Gradient(
                         gradient="linear",
                         stops=[
-                            alt.GradientStop(color="rgba(56,189,248,.4)", offset=0),
-                            alt.GradientStop(color="rgba(56,189,248,.02)", offset=1),
+                            alt.GradientStop(color="rgba(6,214,240,.4)", offset=0),
+                            alt.GradientStop(color="rgba(6,214,240,.02)", offset=1),
                         ],
                         x1=1, x2=1, y1=1, y2=0,
                     ),
@@ -620,7 +596,7 @@ def section_turbidity() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα θολότητας.")
         else:
-            c1, c2 = st.columns(2)
+            c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
             size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="turb_size")
             opacity = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02, key="turb_opacity")
 
@@ -652,7 +628,7 @@ def section_turbidity() -> None:
             )
             st.altair_chart(_chart_cfg(ch), use_container_width=True)
 
-            m1, m2, m3 = st.columns(3)
+            m1, m2, m3 = st.columns(1) if _is_mobile else st.columns(3)
             m1.metric("Εγγραφές", f"{len(pts):,}")
             m2.metric("Ημερομηνίες", f"{plot['date'].nunique():,}")
             m3.metric("Σημεία μέτρησης", f"{plot['point'].nunique():,}")
@@ -668,7 +644,7 @@ def section_turbidity() -> None:
 
             sat_line = (
                 alt.Chart(avg)
-                .mark_line(color="#22d3ee", strokeWidth=2.2)
+                .mark_line(color="#06d6f0", strokeWidth=2.2)
                 .encode(
                     x=alt.X("date:T", title="Ημερομηνία"),
                     y=alt.Y("satellite_display:Q", title="Δορυφορική τιμή (NDTI)"),
@@ -678,7 +654,7 @@ def section_turbidity() -> None:
                     ],
                 )
             )
-            sat_points = alt.Chart(avg).mark_point(color="#22d3ee", size=35, opacity=0.85).encode(
+            sat_points = alt.Chart(avg).mark_point(color="#06d6f0", size=35, opacity=0.85).encode(
                 x="date:T", y="satellite_display:Q"
             )
 
@@ -710,7 +686,7 @@ def section_turbidity() -> None:
             chart = alt.layer(*layers).resolve_scale(y="independent").properties(height=360)
             st.altair_chart(_chart_cfg(chart), use_container_width=True)
 
-            m1, m2, m3, m4 = st.columns(4)
+            m1, m2, m3, m4 = (st.columns(2) + st.columns(2)) if _is_mobile else st.columns(4)
             m1.metric("Ελάχιστη (NDTI)", f"{avg['satellite'].min():.3f}")
             m2.metric("Μέγιστη (NDTI)", f"{avg['satellite'].max():.3f}")
             m3.metric("Μέση (NDTI)", f"{avg['satellite'].mean():.3f}")
@@ -733,7 +709,7 @@ def section_level() -> None:
     val_lbl = df["col"].iloc[0] if "col" in df.columns else "Τιμή (m)"
     dfp = df.drop(columns=["col"], errors="ignore")
 
-    c1, c2, c3 = st.columns([2,1,1])
+    c1, c2, c3 = st.columns(1) if _is_mobile else st.columns([2,1,1])
     with c1:
         drng = st.date_input(
             "Εύρος ημερομηνιών",
@@ -766,19 +742,19 @@ def section_level() -> None:
     base = alt.Chart(dfp)
     if ctype == "Εμβαδόν":
         mark = base.mark_area(
-            line={"color":"#22d3ee","strokeWidth":2},
+            line={"color":"#06d6f0","strokeWidth":2},
             color=alt.Gradient(
                 gradient="linear",
                 stops=[
-                    alt.GradientStop(color="rgba(34,211,238,.45)", offset=0),
-                    alt.GradientStop(color="rgba(34,211,238,.02)", offset=1),
+                    alt.GradientStop(color="rgba(6,214,240,.45)", offset=0),
+                    alt.GradientStop(color="rgba(6,214,240,.02)", offset=1),
                 ],
                 x1=1,x2=1,y1=1,y2=0,
             ),
         )
     else:
-        mark = base.mark_line(color="#22d3ee", strokeWidth=2.2,
-                              point=alt.OverlayMarkDef(color="#22d3ee", size=25))
+        mark = base.mark_line(color="#06d6f0", strokeWidth=2.2,
+                              point=alt.OverlayMarkDef(color="#06d6f0", size=25))
     ch = (
         mark.encode(
             x=alt.X("date:T", title="Ημερομηνία"),
@@ -794,6 +770,26 @@ def section_level() -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════════════════════
+# ── Mobile detection (module-level, runs on every rerun) ──────────────────────
+_MOBILE_JS = """
+<script>
+(function() {
+    const mobile = window.innerWidth < 768;
+    const stored = sessionStorage.getItem('_st_mobile');
+    if (mobile !== (stored === '1')) {
+        sessionStorage.setItem('_st_mobile', mobile ? '1' : '0');
+        const url = new URL(window.location.href);
+        url.searchParams.set('_mobile', mobile ? '1' : '0');
+        window.location.replace(url.toString());
+    }
+})();
+</script>
+"""
+st.markdown(_MOBILE_JS, unsafe_allow_html=True)
+_qp = st.query_params
+_is_mobile = str(_qp.get("_mobile", "0")) == "1"
+
+
 def render_satellite_dashboard(
     show_header: bool = True,
     show_footer: bool = True,
@@ -948,7 +944,7 @@ def render_satellite_dashboard(
     if show_footer:
         st.markdown(
             "<div style='text-align:center;margin-top:3rem;font-size:.68rem;"
-            "color:#2b5570;letter-spacing:.08em;font-family:'Syne',sans-serif;'>"
+            "color:#2b5570;letter-spacing:.08em;font-family:'Bricolage Grotesque',sans-serif;'>"
             "ΕΥΑΘ ΑΕ &nbsp;·&nbsp; Ταμιευτήρας Γαδουρά &nbsp;·&nbsp; "
             "Δορυφορική Παρακολούθηση &nbsp;·&nbsp; Sentinel-2</div>",
             unsafe_allow_html=True,
