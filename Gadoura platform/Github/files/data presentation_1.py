@@ -620,7 +620,7 @@ if df.empty or "date" not in df.columns:
     st.caption("Check the worksheet structure and point/depth rows, then rerun.")
     st.stop()
 
-st.caption(f"Πηγή δεδομένων μετρήσεων πεδίου (Excel): `{MEASUREMENTS_SOURCE_PATH}`")
+st.caption(f"Πηγή δεδομένων μετρήσεων πεδίου (Excel): `{Path(MEASUREMENTS_SOURCE_PATH).name}`")
 
 # ─── CSS ───────────────────────────────────────────────────────────────────────
 # ── Dark theme CSS (matches streamlit_geotiff_map_1.py) ──────────────────────
@@ -691,7 +691,14 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 hr{border-color:var(--bdr)!important;}
 </style>
 """
-st.markdown(CSS, unsafe_allow_html=True)
+try:
+    if hasattr(st, "html"):
+        # On newer Streamlit versions this avoids occasional raw CSS text rendering.
+        st.html(CSS)  # type: ignore[attr-defined]
+    else:
+        st.markdown(CSS, unsafe_allow_html=True)
+except Exception:
+    st.markdown(CSS, unsafe_allow_html=True)
 
 st.markdown("---")
 
