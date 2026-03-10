@@ -79,25 +79,11 @@ st.set_page_config(
 )
 
 APP_DIR = Path(__file__).resolve().parent
-PLATFORM_ROOT = Path(
-    os.getenv("GADOURA_PLATFORM_ROOT", str(APP_DIR.parent))
-).expanduser().resolve()
-CODE_ROOT = Path(
-    os.getenv("GADOURA_CODE_ROOT", str(APP_DIR))
-).expanduser().resolve()
-FIELD_DATA_ROOT = Path(
-    os.getenv("GADOURA_FIELD_DATA_ROOT", str(PLATFORM_ROOT / "field data"))
-).expanduser().resolve()
-SATELLITE_DATA_ROOT = Path(
-    os.getenv("GADOURA_SATELLITE_DATA_ROOT", str(PLATFORM_ROOT / "satellite data"))
-).expanduser().resolve()
-SHARED_DATA_ROOT = Path(
-    os.getenv("GADOURA_DATA_ROOT", str(SATELLITE_DATA_ROOT / "DATA"))
-).expanduser().resolve()
-if not SHARED_DATA_ROOT.exists():
-    legacy_data_root = PLATFORM_ROOT / "DATA"
-    if legacy_data_root.exists():
-        SHARED_DATA_ROOT = legacy_data_root.resolve()
+PLATFORM_ROOT = APP_DIR
+CODE_ROOT = APP_DIR
+FIELD_DATA_ROOT = PLATFORM_ROOT / "field data"
+SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
+SHARED_DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
 
 
 def _first_existing(paths: list[Path]) -> Optional[Path]:

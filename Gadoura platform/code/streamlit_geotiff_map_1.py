@@ -73,7 +73,7 @@ CASE_CONFIG = [
         "label_full": "ΣΥΓΚΕΝΤΡΩΣΕΙΣ ΧΛΩΡΟΦΥΛΛΗΣ",
         "icon":  "🟢",
         "folders": [
-            GADOURA_ROOT / "Chlorophyl_validated" / "code" / "GeoTIFFs",
+            GADOURA_ROOT / "Chlorophyll_validated" / "code" / "GeoTIFFs",
             GADOURA_ROOT / "Chlorophyll"           / "GeoTIFFs",
         ],
         "has_chl": True,
