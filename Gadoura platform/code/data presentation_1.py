@@ -18,25 +18,25 @@ import math
 from typing import Any, Dict, Optional, Tuple
 
 # ── Dark Plotly theme ─────────────────────────────────────────────────────────
-_PLT_BG   = "#09111f"
-_PLT_PAPER= "#0d1e2f"
-_PLT_GRID = "rgba(56,189,248,.07)"
-_PLT_LINE = "rgba(56,189,248,.2)"
-_PLT_TICK = "#5a8ba8"
-_PLT_TITLE= "#c8e4f4"
+_PLT_BG   = "#060d18"
+_PLT_PAPER= "#0a1525"
+_PLT_GRID = "rgba(6,214,240,.06)"
+_PLT_LINE = "rgba(6,214,240,.18)"
+_PLT_TICK = "#5aa8c4"
+_PLT_TITLE= "#dff2fa"
 
 def _dark_layout(**extra):
     base = dict(
         plot_bgcolor=_PLT_BG,
         paper_bgcolor=_PLT_PAPER,
-        font=dict(color=_PLT_TICK),
+        font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
         xaxis=dict(showgrid=True, gridcolor=_PLT_GRID, linecolor=_PLT_LINE,
-                   tickfont=dict(color=_PLT_TICK), title_font=dict(color=_PLT_TITLE)),
+                   tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"), title_font=dict(color=_PLT_TITLE)),
         yaxis=dict(showgrid=True, gridcolor=_PLT_GRID, linecolor=_PLT_LINE,
-                   tickfont=dict(color=_PLT_TICK), title_font=dict(color=_PLT_TITLE)),
-        legend=dict(bgcolor="rgba(13,30,47,.85)", bordercolor="rgba(56,189,248,.2)",
+                   tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"), title_font=dict(color=_PLT_TITLE)),
+        legend=dict(bgcolor="rgba(10,21,37,.9)", bordercolor="rgba(6,214,240,.2)",
                     borderwidth=1, font=dict(color=_PLT_TICK)),
-        hoverlabel=dict(bgcolor="#0d1e2f", font_color="#cfe8f8", bordercolor="rgba(56,189,248,.3)"),
+        hoverlabel=dict(bgcolor="#0a1525", font_color="#dff2fa", bordercolor="rgba(6,214,240,.3)"),
     )
     base.update(extra)
     return base
@@ -49,9 +49,9 @@ def _apply_dark(fig, height=None, title=None, **kw):
         layout["title"] = dict(text=title, font=dict(color=_PLT_TITLE, size=14))
     fig.update_layout(**layout)
     fig.update_xaxes(showgrid=True, gridcolor=_PLT_GRID, linecolor=_PLT_LINE,
-                     tickfont=dict(color=_PLT_TICK), title_font=dict(color=_PLT_TITLE))
+                     tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"), title_font=dict(color=_PLT_TITLE))
     fig.update_yaxes(showgrid=True, gridcolor=_PLT_GRID, linecolor=_PLT_LINE,
-                     tickfont=dict(color=_PLT_TICK), title_font=dict(color=_PLT_TITLE))
+                     tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"), title_font=dict(color=_PLT_TITLE))
     return fig
 
 try:
@@ -466,9 +466,9 @@ def render_level_tab() -> None:
                 y=dfp["display"],
                 mode="lines",
                 name=val_lbl,
-                line=dict(color="#22d3ee", width=2.4),
+                line=dict(color="#06d6f0", width=2.4),
                 fill="tozeroy",
-                fillcolor="rgba(34,211,238,0.22)",
+                fillcolor="rgba(6,214,240,0.22)",
                 hovertemplate="Date: %{x|%d/%m/%Y}<br>Level: %{y:.3f}<extra></extra>",
             )
         )
@@ -479,7 +479,7 @@ def render_level_tab() -> None:
                 y=dfp["display"],
                 mode="lines+markers",
                 name=val_lbl,
-                line=dict(color="#22d3ee", width=2.4),
+                line=dict(color="#06d6f0", width=2.4),
                 marker=dict(size=7, color="#0284c7", line=dict(width=1, color="white")),
                 hovertemplate="Date: %{x|%d/%m/%Y}<br>Level: %{y:.3f}<extra></extra>",
             )
@@ -492,7 +492,7 @@ def render_level_tab() -> None:
         height=380,
         plot_bgcolor=_PLT_BG,
         paper_bgcolor=_PLT_PAPER,
-        font=dict(color=_PLT_TICK),
+        font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
         margin=dict(t=60, b=30, l=60, r=20),
     )
     fig.update_xaxes(showgrid=True, gridcolor=_PLT_GRID, linecolor=_PLT_LINE)
@@ -625,77 +625,70 @@ st.caption(f"Πηγή δεδομένων μετρήσεων πεδίου (Excel)
 # ─── CSS ───────────────────────────────────────────────────────────────────────
 # ── Dark theme CSS (matches streamlit_geotiff_map_1.py) ──────────────────────
 CSS = """
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Noto+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-html, body, [data-testid="stApp"] {
-    background:#09111f !important;
-    color:#d0e8f5 !important;
-    font-family:'DM Sans',sans-serif !important;
+:root{
+  --bg:#060d18;--bg2:#0a1525;--sf:#0e1e30;--sf2:#122236;
+  --ac:#06d6f0;--acd:rgba(6,214,240,.12);--abdr:rgba(6,214,240,.22);
+  --tx:#dff2fa;--mid:#6ab4ce;--dim:#2e6480;--bdr:rgba(6,214,240,.13);
+  --sh:0 10px 52px rgba(0,0,0,.7);--r:16px;
+  --fh:'Bricolage Grotesque',sans-serif;
+  --fb:'Plus Jakarta Sans',sans-serif;
+  --fm:'JetBrains Mono',monospace;
 }
-#MainMenu, footer, header,[data-testid="stDecoration"]{display:none!important;}
-.block-container{padding-top:1.2rem!important;padding-bottom:4rem!important;max-width:1440px!important;}
+html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!important;font-family:var(--fb)!important;}
+[data-testid="stApp"]::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(6,214,240,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(6,214,240,.018) 1px,transparent 1px);background-size:56px 56px;}
+#MainMenu,footer,header,[data-testid="stDecoration"],[data-testid="stToolbar"]{display:none!important;}
+.block-container{padding-top:1.4rem!important;padding-bottom:5rem!important;max-width:1480px!important;position:relative;z-index:1;}
 
-.hcard{
-    background:linear-gradient(130deg,#0b1d36 0%,#0d2540 55%,#0a2235 100%);
-    border:1px solid rgba(56,189,248,.2); border-radius:20px;
-    padding:1.5rem 2.2rem; margin-bottom:1.8rem;
-    display:flex; align-items:center; gap:2rem;
-    box-shadow:0 6px 48px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);
-}
-.hcard h1{
-    font-family:'Noto Sans','DM Sans',sans-serif!important;
-    font-size:1.35rem!important; font-weight:700!important;
-    color:#e8f4ff!important; margin:0 0 .3rem 0!important;
-    line-height:1.4!important; letter-spacing:.01em!important;
-}
-.hcard .sub{font-size:.78rem;color:#5a9dc0;letter-spacing:.06em;text-transform:uppercase;}
-.badge{
-    display:inline-block; background:rgba(56,189,248,.1);
-    border:1px solid rgba(56,189,248,.3); color:#38bdf8;
-    border-radius:99px; padding:.15rem .75rem; font-size:.68rem;
-    font-weight:700; letter-spacing:.08em; margin-top:.45rem;
-}
-.slabel{
-    font-family:'Syne',sans-serif; font-size:.65rem; font-weight:700;
-    letter-spacing:.16em; text-transform:uppercase; color:#355f7a; margin-bottom:.6rem;
-}
-.metric-card{
-    background:linear-gradient(135deg,#0d1e2f,#0a1c2c);
-    border:1px solid rgba(56,189,248,.15); border-radius:14px;
-    padding:1rem 1.2rem; text-align:center;
-}
-.metric-val{
-    font-family:'Syne',sans-serif; font-size:1.65rem; font-weight:700; color:#38bdf8;
-}
-.metric-label{font-size:.7rem;color:#4a8aaa;margin-top:.3rem;letter-spacing:.06em;text-transform:uppercase;}
-[data-testid="stMetric"]{
-    background:#0d1e2f!important; border:1px solid rgba(56,189,248,.12)!important;
-    border-radius:12px!important; padding:.85rem 1.1rem!important;
-}
-[data-testid="stMetricLabel"]{font-size:.65rem!important;letter-spacing:.09em!important;text-transform:uppercase!important;color:#355f7a!important;}
-[data-testid="stMetricValue"]{font-family:'Syne',sans-serif!important;font-size:1.55rem!important;color:#38bdf8!important;font-weight:700!important;}
-[data-testid="stButton"]>button{
-    background:#0d1e32!important; border:1px solid rgba(56,189,248,.18)!important;
-    color:#7ab3ce!important; border-radius:14px!important;
-    font-family:'Syne',sans-serif!important; font-size:.78rem!important;
-    font-weight:600!important; padding:.65rem 1rem!important; transition:all .2s ease!important;
-}
-[data-testid="stButton"]>button:hover{
-    background:#142840!important; border-color:rgba(56,189,248,.55)!important;
-    color:#cfe8f8!important; transform:translateY(-2px)!important;
-}
-[data-testid="stDateInput"] label,[data-testid="stSlider"] label,[data-testid="stSelectbox"] label{
-    font-size:.67rem!important;letter-spacing:.1em!important;text-transform:uppercase!important;
-    color:#355f7a!important;font-weight:600!important;
-}
-[data-testid="stTabs"] [role="tab"]{font-family:'Syne',sans-serif!important;font-size:.76rem!important;letter-spacing:.05em!important;color:#355f7a!important;}
-[data-testid="stTabs"] [role="tab"][aria-selected="true"]{color:#38bdf8!important;border-bottom-color:#38bdf8!important;}
-[data-testid="stExpander"]{background:#0c1a29!important;border:1px solid rgba(56,189,248,.1)!important;border-radius:12px!important;}
-hr{border-color:rgba(56,189,248,.1)!important;}
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:#09111f;}
-::-webkit-scrollbar-thumb{background:#1a3a55;border-radius:3px;}
-[data-testid="stSidebar"]{background:#0a1624!important;border-right:1px solid rgba(56,189,248,.1)!important;}
+.hcard{background:linear-gradient(140deg,#091726 0%,#0d2340 55%,#071520 100%);border:1px solid var(--abdr);border-top:2px solid rgba(6,214,240,.55);border-radius:var(--r);padding:1.6rem 2.5rem;margin-bottom:2rem;display:flex;align-items:center;gap:2.4rem;box-shadow:var(--sh),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden;}
+.hcard::before{content:'';position:absolute;top:-80px;right:-80px;width:260px;height:260px;background:radial-gradient(circle,rgba(6,214,240,.08) 0%,transparent 70%);pointer-events:none;}
+.hcard h1{font-family:var(--fh)!important;font-size:1.45rem!important;font-weight:700!important;color:#f0faff!important;margin:0 0 .35rem 0!important;line-height:1.3!important;letter-spacing:-.02em!important;}
+.hcard .sub{font-size:.72rem;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
+.badge{display:inline-flex;align-items:center;gap:.4rem;background:var(--acd);border:1px solid var(--abdr);color:var(--ac);border-radius:99px;padding:.22rem .9rem;font-family:var(--fh);font-size:.65rem;font-weight:600;letter-spacing:.05em;margin-top:.5rem;}
+
+.slabel{font-family:var(--fh);font-size:.6rem;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:.75rem;padding-left:.15rem;}
+
+.metric-card{background:linear-gradient(135deg,var(--sf),var(--bg2));border:1px solid var(--bdr);border-top:2px solid rgba(6,214,240,.32);border-radius:14px;padding:1.1rem 1.3rem;text-align:center;transition:border-color .2s,box-shadow .2s;}
+.metric-card:hover{border-color:rgba(6,214,240,.42);box-shadow:0 0 28px rgba(6,214,240,.08);}
+.metric-val{font-family:var(--fh);font-size:1.8rem;font-weight:700;color:var(--ac);letter-spacing:-.03em;}
+.metric-label{font-family:var(--fh);font-size:.6rem;color:var(--dim);margin-top:.4rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+
+[data-testid="stMetric"]{background:linear-gradient(135deg,var(--sf),var(--bg2))!important;border:1px solid var(--bdr)!important;border-top:2px solid rgba(6,214,240,.3)!important;border-radius:14px!important;padding:1rem 1.2rem!important;}
+[data-testid="stMetricLabel"]{font-family:var(--fh)!important;font-size:.6rem!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--dim)!important;font-weight:600!important;}
+[data-testid="stMetricValue"]{font-family:var(--fh)!important;font-size:1.6rem!important;color:var(--ac)!important;font-weight:700!important;letter-spacing:-.02em!important;}
+
+[data-testid="stButton"]>button{background:var(--sf)!important;border:1px solid var(--bdr)!important;color:var(--mid)!important;border-radius:12px!important;font-family:var(--fh)!important;font-size:.75rem!important;font-weight:600!important;padding:.7rem 1rem!important;transition:all .18s ease!important;}
+[data-testid="stButton"]>button:hover{background:var(--sf2)!important;border-color:rgba(6,214,240,.5)!important;color:var(--tx)!important;transform:translateY(-1px)!important;box-shadow:0 6px 22px rgba(0,0,0,.4)!important;}
+[data-testid="stDownloadButton"]>button{background:linear-gradient(135deg,#073d60,#052e4a)!important;border-color:var(--ac)!important;color:#e0f8ff!important;}
+
+[data-testid="stSelectbox"] label,[data-testid="stMultiselect"] label,[data-testid="stSlider"] label,[data-testid="stDateInput"] label,[data-testid="stRadio"] label{font-family:var(--fh)!important;font-size:.62rem!important;letter-spacing:.13em!important;text-transform:uppercase!important;color:var(--dim)!important;font-weight:600!important;}
+[data-testid="stSelectbox"] [data-baseweb="select"]>div{background:var(--bg2)!important;border-color:var(--bdr)!important;color:var(--mid)!important;border-radius:8px!important;}
+[data-baseweb="slider"] [role="slider"]{background:var(--ac)!important;box-shadow:0 0 0 3px rgba(6,214,240,.2)!important;}
+
+[data-testid="stTabs"] [role="tablist"]{border-bottom:1px solid var(--bdr)!important;gap:.2rem!important;}
+[data-testid="stTabs"] [role="tab"]{font-family:var(--fh)!important;font-size:.7rem!important;font-weight:600!important;letter-spacing:.07em!important;text-transform:uppercase!important;color:var(--dim)!important;padding:.5rem 1.1rem!important;border-radius:8px 8px 0 0!important;transition:all .15s!important;}
+[data-testid="stTabs"] [role="tab"]:hover{color:var(--mid)!important;}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"]{color:var(--ac)!important;border-bottom:2px solid var(--ac)!important;background:var(--acd)!important;}
+
+[data-testid="stExpander"]{background:var(--sf)!important;border:1px solid var(--bdr)!important;border-radius:12px!important;}
+[data-testid="stExpander"] summary{font-family:var(--fh)!important;font-size:.8rem!important;font-weight:600!important;color:var(--mid)!important;}
+
+[data-testid="stDataFrame"] thead th{background:var(--sf2)!important;color:var(--mid)!important;font-family:var(--fh)!important;font-size:.65rem!important;letter-spacing:.08em!important;text-transform:uppercase!important;}
+
+[data-testid="stSidebar"]{background:var(--bg2)!important;border-right:1px solid var(--bdr)!important;}
+[data-testid="stSidebar"] h3{font-family:var(--fh)!important;font-size:.72rem!important;font-weight:700!important;letter-spacing:.15em!important;text-transform:uppercase!important;color:var(--dim)!important;}
+
+[data-testid="stCaptionContainer"]{color:var(--dim)!important;font-size:.68rem!important;font-family:var(--fm)!important;}
+[data-testid="stInfo"]{background:rgba(6,214,240,.06)!important;border:1px solid rgba(6,214,240,.2)!important;border-radius:10px!important;color:var(--mid)!important;}
+[data-testid="stWarning"]{background:rgba(245,158,11,.07)!important;border:1px solid rgba(245,158,11,.25)!important;border-radius:10px!important;}
+[data-testid="stError"]{background:rgba(239,68,68,.07)!important;border:1px solid rgba(239,68,68,.25)!important;border-radius:10px!important;}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:#1a3d58;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#2a5472;}
+hr{border-color:var(--bdr)!important;}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -706,18 +699,14 @@ st.markdown("---")
 col1, col2, col3, col4 = st.columns(4)
 dates = sorted(df["date"].unique())
 with col1:
-    st.markdown(f"""<div class="metric-card"><div class="metric-val">{len(dates)}</div>
-    <div class="metric-label">Δειγματοληψίες</div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="metric-card"><div style="font-size:1.3rem;margin-bottom:.3rem">📅</div><div class="metric-val">{len(dates)}</div><div class="metric-label">Δειγματοληψίες</div></div>""", unsafe_allow_html=True)
 with col2:
-    st.markdown(f"""<div class="metric-card"><div class="metric-val">{df['point'].nunique()}</div>
-    <div class="metric-label">Σημεία Δειγματοληψίας</div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="metric-card"><div style="font-size:1.3rem;margin-bottom:.3rem">📍</div><div class="metric-val">{df['point'].nunique()}</div><div class="metric-label">Σημεία</div></div>""", unsafe_allow_html=True)
 with col3:
-    st.markdown(f"""<div class="metric-card"><div class="metric-val">{df['depth'].nunique()}</div>
-    <div class="metric-label">Βάθη Μέτρησης</div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="metric-card"><div style="font-size:1.3rem;margin-bottom:.3rem">🌊</div><div class="metric-val">{df['depth'].nunique()}</div><div class="metric-label">Βάθη</div></div>""", unsafe_allow_html=True)
 with col4:
     params_with_data = sum(1 for p in COL_MAP if df[p].notna().any())
-    st.markdown(f"""<div class="metric-card"><div class="metric-val">{params_with_data}</div>
-    <div class="metric-label">Παράμετροι</div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="metric-card"><div style="font-size:1.3rem;margin-bottom:.3rem">🔬</div><div class="metric-val">{params_with_data}</div><div class="metric-label">Παράμετροι</div></div>""", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -2199,8 +2188,8 @@ with tab_ts:
                 paper_bgcolor=_PLT_PAPER,
             )
             fig.update_layout(
-                font=dict(color=_PLT_TICK),
-                hoverlabel=dict(bgcolor="#0d1e2f", font_color="#cfe8f8", bordercolor="rgba(56,189,248,.3)"),
+                font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                hoverlabel=dict(bgcolor="#0a1525", font_color="#dff2fa", bordercolor="rgba(6,214,240,.3)"),
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
@@ -2208,7 +2197,7 @@ with tab_ts:
                     xanchor="right",
                     x=1,
                     bgcolor="rgba(13,30,47,.85)",
-                    bordercolor="rgba(56,189,248,.2)",
+                    bordercolor="rgba(6,214,240,.2)",
                     borderwidth=1,
                     font=dict(color=_PLT_TICK)
                 ),
@@ -2218,15 +2207,15 @@ with tab_ts:
             fig.update_xaxes(
                 showgrid=True,
                 gridcolor=_PLT_GRID,
-                tickfont=dict(color=_PLT_TICK),
-                title_font=dict(color=_PLT_TICK),
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 linecolor=_PLT_LINE
             )
             fig.update_yaxes(
                 showgrid=True,
                 gridcolor=_PLT_GRID,
-                tickfont=dict(color=_PLT_TICK),
-                title_font=dict(color=_PLT_TICK),
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 linecolor=_PLT_LINE
             )
             st.plotly_chart(fig, use_container_width=True, theme=None)
@@ -2252,13 +2241,13 @@ with tab_ts:
             fig_h.update_layout(
                 plot_bgcolor=_PLT_BG,
                 paper_bgcolor=_PLT_PAPER,
-                font=dict(color=_PLT_TICK),
+                font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 margin=dict(t=55, b=95, l=70, r=20),
                 coloraxis_colorbar=dict(
                     outlinecolor=_PLT_LINE,
                     outlinewidth=1,
-                    tickfont=dict(color=_PLT_TICK),
-                    title_font=dict(color=_PLT_TICK),
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 ),
             )
             fig_h.update_xaxes(
@@ -2266,16 +2255,16 @@ with tab_ts:
                 automargin=True,
                 showgrid=False,
                 linecolor=_PLT_LINE,
-                tickfont=dict(color=_PLT_TICK),
-                title_font=dict(color=_PLT_TICK),
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 title_standoff=18,
             )
             fig_h.update_yaxes(
                 automargin=True,
                 showgrid=False,
                 linecolor=_PLT_LINE,
-                tickfont=dict(color=_PLT_TICK),
-                title_font=dict(color=_PLT_TICK),
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 title_standoff=10,
             )
             st.plotly_chart(fig_h, use_container_width=True, theme=None)
@@ -2290,7 +2279,7 @@ with tab_ts:
                     y=avg_ts[param],
                     mode="lines+markers",
                     name="Average",
-                    line=dict(color="#0ea5e9", width=3),
+                    line=dict(color="#06d6f0", width=3),
                     marker=dict(size=8, color="#0369a1", line=dict(width=1, color="white")),
                     hovertemplate="Date: %{x|%d/%m/%Y}<br>Average: %{y:.3f}<extra></extra>",
                 ))
@@ -2301,7 +2290,7 @@ with tab_ts:
                     height=340,
                     plot_bgcolor=_PLT_BG,
                     paper_bgcolor=_PLT_PAPER,
-                    font=dict(color=_PLT_TICK),
+                    font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                     margin=dict(t=55, b=95, l=60, r=20),
                 )
                 fig_avg.update_xaxes(
@@ -2310,8 +2299,8 @@ with tab_ts:
                     linecolor=_PLT_LINE,
                     tickangle=-25,
                     automargin=True,
-                    tickfont=dict(color=_PLT_TICK),
-                    title_font=dict(color=_PLT_TICK),
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                     title_standoff=18,
                 )
                 fig_avg.update_yaxes(
@@ -2319,8 +2308,8 @@ with tab_ts:
                     gridcolor=_PLT_GRID,
                     linecolor=_PLT_LINE,
                     automargin=True,
-                    tickfont=dict(color=_PLT_TICK),
-                    title_font=dict(color=_PLT_TICK),
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                     title_standoff=10,
                 )
                 st.plotly_chart(fig_avg, use_container_width=True, theme=None)
@@ -2374,7 +2363,7 @@ with tab_ts:
                 fig_hov.update_layout(
                     plot_bgcolor=_PLT_BG,
                     paper_bgcolor=_PLT_PAPER,
-                    font=dict(color=_PLT_TICK),
+                    font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                     margin=dict(t=55, b=25, l=45, r=20),
                 )
                 fig_hov.update_xaxes(
@@ -2383,16 +2372,16 @@ with tab_ts:
                     showgrid=True,
                     gridcolor=_PLT_GRID,
                     linecolor=_PLT_LINE,
-                    tickfont=dict(color=_PLT_TICK),
-                    title_font=dict(color=_PLT_TICK),
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 )
                 fig_hov.update_yaxes(
                     autorange="reversed",
                     showgrid=True,
                     gridcolor=_PLT_GRID,
                     linecolor=_PLT_LINE,
-                    tickfont=dict(color=_PLT_TICK),
-                    title_font=dict(color=_PLT_TICK),
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 )
                 st.plotly_chart(fig_hov, use_container_width=True, theme=None)
                 if sel_depth != "Όλα":
@@ -2451,7 +2440,7 @@ with tab_ts:
                                         y=strat_ts["delta_do"],
                                         mode="lines+markers",
                                         name="ΔDO (Surface-Deep)",
-                                        line=dict(color="#0ea5e9", width=2.5),
+                                        line=dict(color="#06d6f0", width=2.5),
                                     ),
                                     secondary_y=True,
                                 )
@@ -2460,7 +2449,7 @@ with tab_ts:
                                 height=360,
                                 plot_bgcolor=_PLT_BG,
                                 paper_bgcolor=_PLT_PAPER,
-                                font=dict(color=_PLT_TICK),
+                                font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                                 legend=dict(
                                     orientation="h",
                                     yanchor="bottom",
@@ -2468,7 +2457,7 @@ with tab_ts:
                                     xanchor="left",
                                     x=0,
                                     bgcolor="rgba(13,30,47,.85)",
-                                    bordercolor="rgba(56,189,248,.2)",
+                                    bordercolor="rgba(6,214,240,.2)",
                                     borderwidth=1,
                                 ),
                                 margin=dict(t=55, b=25, l=45, r=45),
@@ -2480,21 +2469,21 @@ with tab_ts:
                                 showgrid=True,
                                 gridcolor=_PLT_GRID,
                                 linecolor=_PLT_LINE,
-                                tickfont=dict(color=_PLT_TICK),
-                                title_font=dict(color=_PLT_TICK),
+                                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                             )
                             fig_strat.update_yaxes(
                                 showgrid=True,
                                 gridcolor=_PLT_GRID,
                                 linecolor=_PLT_LINE,
-                                tickfont=dict(color=_PLT_TICK),
-                                title_font=dict(color=_PLT_TICK),
+                                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                                 secondary_y=False,
                             )
                             fig_strat.update_yaxes(
                                 linecolor=_PLT_LINE,
-                                tickfont=dict(color=_PLT_TICK),
-                                title_font=dict(color=_PLT_TICK),
+                                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                                 secondary_y=True,
                             )
                             st.plotly_chart(fig_strat, use_container_width=True, theme=None)
@@ -2506,7 +2495,7 @@ with tab_ts:
                 mu = float(global_vals.mean())
                 sigma = float(global_vals.std(ddof=0))
                 anom_ts["z"] = (anom_ts[param] - mu) / sigma
-                bar_colors = ["#ef4444" if abs(v) >= 2 else "#38bdf8" for v in anom_ts["z"]]
+                bar_colors = ["#ef4444" if abs(v) >= 2 else "#06d6f0" for v in anom_ts["z"]]
 
                 fig_anom = go.Figure()
                 fig_anom.add_trace(go.Bar(
@@ -2526,22 +2515,22 @@ with tab_ts:
                     height=320,
                     plot_bgcolor=_PLT_BG,
                     paper_bgcolor=_PLT_PAPER,
-                    font=dict(color=_PLT_TICK),
+                    font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                     margin=dict(t=55, b=25, l=45, r=20),
                 )
                 fig_anom.update_xaxes(
                     showgrid=True,
                     gridcolor=_PLT_GRID,
                     linecolor=_PLT_LINE,
-                    tickfont=dict(color=_PLT_TICK),
-                    title_font=dict(color=_PLT_TICK),
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 )
                 fig_anom.update_yaxes(
                     showgrid=True,
                     gridcolor=_PLT_GRID,
                     linecolor=_PLT_LINE,
-                    tickfont=dict(color=_PLT_TICK),
-                    title_font=dict(color=_PLT_TICK),
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                 )
                 st.plotly_chart(fig_anom, use_container_width=True, theme=None)
 
@@ -2757,7 +2746,7 @@ with tab_depth:
                         height=400,
                         plot_bgcolor=_PLT_BG,
                         paper_bgcolor=_PLT_PAPER,
-                        font=dict(color=_PLT_TICK),
+                        font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                         legend=dict(
                             orientation="h",
                             yanchor="bottom",
@@ -2765,7 +2754,7 @@ with tab_depth:
                             xanchor="left",
                             x=0,
                             bgcolor="rgba(13,30,47,.85)",
-                            bordercolor="rgba(56,189,248,.2)",
+                            bordercolor="rgba(6,214,240,.2)",
                             borderwidth=1
                         ),
                         margin=dict(t=60, b=20, l=60, r=20)
@@ -2774,14 +2763,14 @@ with tab_depth:
                         showgrid=True,
                         gridcolor=_PLT_GRID,
                         linecolor=_PLT_LINE,
-                        tickfont=dict(color=_PLT_TICK),
+                        tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                         title_font=dict(color=_PLT_TICK)
                     )
                     fig_p.update_yaxes(
                         showgrid=True,
                         gridcolor=_PLT_GRID,
                         linecolor=_PLT_LINE,
-                        tickfont=dict(color=_PLT_TICK),
+                        tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
                         title_font=dict(color=_PLT_TICK)
                     )
                     with cols[i % n_cols]:
@@ -2847,15 +2836,15 @@ with tab_compare:
                 showgrid=True,
                 gridcolor=_PLT_GRID,
                 linecolor=_PLT_LINE,
-                tickfont=dict(color=_PLT_TICK),
-                title_font=dict(color=_PLT_TICK),
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
             )
             fig_cmp.update_yaxes(
                 showgrid=True,
                 gridcolor=_PLT_GRID,
                 linecolor=_PLT_LINE,
-                tickfont=dict(color=_PLT_TICK),
-                title_font=dict(color=_PLT_TICK),
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
             )
             st.plotly_chart(fig_cmp, use_container_width=True, theme=None)
         
