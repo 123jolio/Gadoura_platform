@@ -1,0 +1,12 @@
+<?xml version = '1.0'  encoding = 'ISO-8859-1'  standalone = 'yes' ?>
+<!-- PlotDigitizer data file: created on Thu Feb 20 09:16:24 EET 2025 -->
+<data>
+<image file='2023_07_23.jpg' />
+<axesnames x='X'  y='Y' />
+<calibpoints minXaxisX='0.0' minXaxisY='930.6666666666666' maxXaxisX='1024.0' maxXaxisY='932.0' minYaxisX='0.0' minYaxisY='930.6666666666666' maxYaxisX='0.0' maxYaxisY='1.3333333333333333' aX1='0.0' aX2='1024.0' aY1='930.0' aY2='1.3333' isXLog='false' isYLog='false' />
+<point n='0' x='4.0' y='929.3333333333334' dx='3.9982571101597943' dy='928.6624185017262' />
+<point n='1' x='1022.6666666666666' y='929.3333333333334' dx='1022.6631967108889' dy='927.3369810637479' />
+<point n='2' x='1017.3333333333334' y='1.3333333333333333' dx='1016.1215411350826' dy='0.00959742777823809' />
+<point n='3' x='1.3333333333333333' y='4.0' dx='0.1267358962403762' dy='3.996318936252092' />
+<point n='4' x='4.0' y='925.3333333333334' dx='3.993048785656763' dy='924.6652877987133' />
+</data>

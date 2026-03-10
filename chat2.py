@@ -126,6 +126,62 @@ WATERBODY_FOLDERS = {
     "Γαδουρά": "Gadoura",
 }
 
+# Dynamically detect available waterbodies by scanning the base directory
+@st.cache_data
+def get_waterbody_mapping() -> dict[str, str]:
+    """
+    Returns a mapping of display name -> folder name for all available waterbodies.
+    Starts with the statically defined WATERBODY_FOLDERS and augments it by scanning
+    APP_BASE_DIR for additional waterbody directories that contain at least one
+    parameter folder with .tif files (directly or under GeoTIFFs/).
+    """
+    mapping = dict(WATERBODY_FOLDERS)  # copy static mapping first
+
+    try:
+        for item in os.listdir(APP_BASE_DIR):
+            item_path = os.path.join(APP_BASE_DIR, item)
+            if not os.path.isdir(item_path):
+                continue
+            # Skip obvious non-waterbody directories (common project files/folders)
+            skip_names = {"__pycache__", ".git", ".streamlit", "venv", "env"}
+            if item in skip_names:
+                continue
+            if item.startswith('.'):
+                continue
+
+            # If this folder is already mapped as a waterbody folder, skip
+            if item in mapping.values():
+                continue
+
+            # Heuristic: treat as waterbody if it has at least one subfolder (parameter)
+            # with .tif files either directly or under GeoTIFFs/
+            has_tif = False
+            try:
+                for sub in os.listdir(item_path):
+                    sub_path = os.path.join(item_path, sub)
+                    if not os.path.isdir(sub_path):
+                        continue
+                    tif_files = glob.glob(os.path.join(sub_path, "*.tif"))
+                    if not tif_files:
+                        tif_files = glob.glob(os.path.join(sub_path, "GeoTIFFs", "*.tif"))
+                    if tif_files:
+                        has_tif = True
+                        break
+            except Exception:
+                pass
+
+            if has_tif:
+                # Use folder name as display name if we don't have a nicer mapping
+                display_name = item
+                # Avoid collision with existing display names
+                if display_name in mapping and mapping[display_name] != item:
+                    display_name = f"{display_name} ({item})"
+                mapping.setdefault(display_name, item)
+    except Exception as e:
+        debug_message(f"DEBUG: Σφάλμα δυναμικής ανίχνευσης υδάτινων σωμάτων: {e}")
+
+    return mapping
+
 # Parameter name mapping: Greek display name -> English folder name
 PARAMETER_MAPPING = {
     "Πραγματικό": "Real",
@@ -298,10 +354,17 @@ def run_custom_sidebar_ui_custom():
     st.sidebar.markdown("<div class='nav-section'><h4>🛠️ Επιλογές Ανάλυσης</h4></div>", unsafe_allow_html=True)
     st.sidebar.info("❔ Επιλέξτε τις ρυθμίσεις σας και προχωρήστε στα αποτελέσματα!")
 
-    waterbody_options = list(WATERBODY_FOLDERS.keys())
+    waterbody_options = list(get_waterbody_mapping().keys())
     default_wb_idx = 0 if waterbody_options else None
 
     waterbody = st.sidebar.selectbox("🌊 Υδάτινο σώμα", waterbody_options, index=default_wb_idx, key=SESSION_KEY_WATERBODY)
+
+    # If the waterbody changed, reset the selected index so stale choices (e.g., 'BGR') don't persist
+    prev_wb = st.session_state.get("_prev_waterbody")
+    if prev_wb != waterbody:
+        st.session_state["_prev_waterbody"] = waterbody
+        st.session_state.pop(SESSION_KEY_INDEX, None)
+        st.session_state.pop("_temp_index_display", None)
     
     # Get available parameters dynamically
     available_parameters_english = get_available_parameters(waterbody)
@@ -327,12 +390,26 @@ def run_custom_sidebar_ui_custom():
         current_index_display = REVERSE_PARAMETER_MAPPING.get(current_index_english, current_index_english)
         if current_index_display in available_parameters:
             default_index_idx = available_parameters.index(current_index_display)
+        else:
+            # If the previously selected index is not available for the new waterbody,
+            # reset to the first available parameter for this waterbody.
+            default_index_idx = 0
     
     # Create a mapping from display names to English names for the selectbox
     display_to_english_mapping = {}
     for display_name in available_parameters:
         english_name = PARAMETER_MAPPING.get(display_name, display_name)
         display_to_english_mapping[display_name] = english_name
+
+    # Ensure the session's selected index is valid for the current waterbody.
+    # If not, set it to the default (first available) and sync the display key.
+    if available_parameters and available_parameters_english:
+        current_index_english = st.session_state.get(SESSION_KEY_INDEX)
+        if current_index_english not in available_parameters_english:
+            initial_english = display_to_english_mapping[available_parameters[default_index_idx]]
+            st.session_state[SESSION_KEY_INDEX] = initial_english
+            # Keep the display widget in sync so the summary shows the correct label
+            st.session_state["_temp_index_display"] = available_parameters[default_index_idx]
     
     # Custom selectbox that stores English names but displays Greek names
     def on_index_change():
@@ -539,19 +616,39 @@ def create_chl_legend_figure(orientation="horizontal", theme_bg_color=None, them
 
 @st.cache_data
 def get_data_folder(waterbody: str, index_name: str) -> str | None:
-    waterbody_folder_name = WATERBODY_FOLDERS.get(waterbody)
+    # Resolve waterbody folder using dynamic mapping
+    waterbody_folder_name = get_waterbody_mapping().get(waterbody)
     if not waterbody_folder_name:
         st.error(f"Δεν έχει οριστεί αντιστοίχιση φακέλου για το υδάτινο σώμα: '{waterbody}'.")
         return None
 
-    # Use the index_name directly as the folder name since we're now detecting parameters dynamically
-    # This eliminates the need for hardcoded Greek-to-English mappings
+    # 1) Try using the provided index_name directly (assumed English)
     data_folder = os.path.join(APP_BASE_DIR, waterbody_folder_name, index_name)
     debug_message(f"DEBUG: Αναζήτηση φακέλου δεδομένων: {data_folder}")
+    if os.path.exists(data_folder) and os.path.isdir(data_folder):
+        return data_folder
 
-    if not os.path.exists(data_folder) or not os.path.isdir(data_folder):
-        return None
-    return data_folder
+    # 2) Fallback: try the Greek equivalent folder if mapping exists
+    greek_name = REVERSE_PARAMETER_MAPPING.get(index_name)
+    if greek_name:
+        data_folder_greek = os.path.join(APP_BASE_DIR, waterbody_folder_name, greek_name)
+        debug_message(f"DEBUG: Εναλλακτική αναζήτηση (Greek): {data_folder_greek}")
+        if os.path.exists(data_folder_greek) and os.path.isdir(data_folder_greek):
+            return data_folder_greek
+
+    # 3) Last resort: case-insensitive exact match against subfolder names
+    try:
+        parent_dir = os.path.join(APP_BASE_DIR, waterbody_folder_name)
+        wanted_lower = index_name.lower()
+        for item in os.listdir(parent_dir):
+            item_path = os.path.join(parent_dir, item)
+            if os.path.isdir(item_path) and item.lower() == wanted_lower:
+                debug_message(f"DEBUG: Ταίριασμα μέσω case-insensitive: {item_path}")
+                return item_path
+    except Exception as e:
+        debug_message(f"DEBUG: Σφάλμα κατά την αναζήτηση φακέλων δεδομένων: {e}")
+
+    return None
 
 @st.cache_data
 def get_available_parameters(waterbody: str) -> list[str]:
@@ -559,7 +656,8 @@ def get_available_parameters(waterbody: str) -> list[str]:
     Dynamically detects all available parameters (indices) for a given waterbody
     by scanning the subfolders in the waterbody's data directory.
     """
-    waterbody_folder_name = WATERBODY_FOLDERS.get(waterbody)
+    # Resolve waterbody folder using dynamic mapping
+    waterbody_folder_name = get_waterbody_mapping().get(waterbody)
     if not waterbody_folder_name:
         debug_message(f"DEBUG: Δεν βρέθηκε αντιστοίχιση φακέλου για το υδάτινο σώμα: '{waterbody}'")
         return []
@@ -584,15 +682,18 @@ def get_available_parameters(waterbody: str) -> list[str]:
                     # Look in GeoTIFFs subfolder
                     tif_files = glob.glob(os.path.join(item_path, "GeoTIFFs", "*.tif"))
                 if tif_files:
-                    available_parameters.append(item)
-                    debug_message(f"DEBUG: Βρέθηκε παράμετρος '{item}' με {len(tif_files)} αρχεία .tif")
+                    # Normalize folder name to English if a Greek mapping exists
+                    normalized = PARAMETER_MAPPING.get(item, item)
+                    if normalized not in available_parameters:
+                        available_parameters.append(normalized)
+                    debug_message(f"DEBUG: Βρέθηκε παράμετρος '{item}' (ως '{normalized}') με {len(tif_files)} αρχεία .tif")
     except Exception as e:
         debug_message(f"DEBUG: Σφάλμα κατά τη σάρωση παραμέτρων: {e}")
         return []
     
     # Sort parameters alphabetically for consistent ordering
     available_parameters.sort()
-    debug_message(f"DEBUG: Διαθέσιμες παράμετροι: {available_parameters}")
+    debug_message(f"DEBUG: Διαθέσιμες παράμετροι (EN): {available_parameters}")
     return available_parameters
 
 @st.cache_data
@@ -1442,7 +1543,7 @@ def main_app():
 
     # Check if the selected index is available for the selected waterbody
     available_params_for_wb = get_available_parameters(selected_wb)
-    if selected_wb == "Γαδουρά" and selected_idx in available_params_for_wb:
+    if selected_idx in available_params_for_wb:
         if selected_an == "Προφίλ ποιότητας και στάθμης":
             run_water_quality_dashboard(selected_wb, selected_idx)
         elif selected_an == "Eργαλεία Πρόβλεψης και έγκαιρης ενημέρωσης":
