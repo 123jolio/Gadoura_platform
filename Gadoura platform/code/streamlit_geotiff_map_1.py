@@ -24,15 +24,9 @@ from streamlit_folium import st_folium
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 APP_DIR      = Path(__file__).resolve().parent
-PLATFORM_ROOT = Path(
-    os.getenv("GADOURA_PLATFORM_ROOT", str(APP_DIR.parent))
-).expanduser().resolve()
-SATELLITE_DATA_ROOT = Path(
-    os.getenv("GADOURA_SATELLITE_DATA_ROOT", str(PLATFORM_ROOT / "satellite data"))
-).expanduser().resolve()
-DATA_ROOT = Path(
-    os.getenv("GADOURA_DATA_ROOT", str(SATELLITE_DATA_ROOT / "DATA"))
-).expanduser().resolve()
+PLATFORM_ROOT = APP_DIR
+SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
+DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
 
 # Backward compatibility for legacy layout without "satellite data" folder.
 if not DATA_ROOT.exists():
