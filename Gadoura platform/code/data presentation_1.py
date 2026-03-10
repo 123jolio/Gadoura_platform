@@ -11,14 +11,11 @@ import re
 from pathlib import Path
 from io import BytesIO
 import time
+import importlib
 import os
 import json
 import math
-import socket
-import subprocess
-import sys
 from typing import Any, Dict, Optional, Tuple
-import streamlit.components.v1 as components
 
 # ── Dark Plotly theme ─────────────────────────────────────────────────────────
 _PLT_BG   = "#09111f"
@@ -79,83 +76,30 @@ st.set_page_config(
 )
 
 APP_DIR = Path(__file__).resolve().parent
-PLATFORM_ROOT = APP_DIR
-CODE_ROOT = APP_DIR
+def _resolve_platform_root(app_dir: Path) -> Path:
+    # Supports both layouts:
+    # 1) script at repo root with sibling data folders
+    # 2) script under `code/` with data folders at parent
+    direct_has_data = (app_dir / "satellite data").exists() or (app_dir / "field data").exists()
+    parent_has_data = (app_dir.parent / "satellite data").exists() or (app_dir.parent / "field data").exists()
+    if direct_has_data:
+        return app_dir
+    if parent_has_data:
+        return app_dir.parent
+    return app_dir
+
+PLATFORM_ROOT = _resolve_platform_root(APP_DIR)
 FIELD_DATA_ROOT = PLATFORM_ROOT / "field data"
 SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
 SHARED_DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
+if not SHARED_DATA_ROOT.exists():
+    legacy_data_root = PLATFORM_ROOT / "DATA"
+    if legacy_data_root.exists():
+        SHARED_DATA_ROOT = legacy_data_root
 
-
-def _first_existing(paths: list[Path]) -> Optional[Path]:
-    for p in paths:
-        if p.exists():
-            return p
-    return None
-
-
-def _resolve_satellite_app_script() -> Path:
-    env_script = os.getenv("GADOURA_SATELLITE_APP_SCRIPT", "").strip()
-    candidates: list[Path] = []
-    if env_script:
-        candidates.append(Path(env_script).expanduser())
-    candidates.extend(
-        [
-            CODE_ROOT / "streamlit_geotiff_map_1.py",
-            CODE_ROOT / "streamlit_geotiff_map.py",
-            APP_DIR / "streamlit_geotiff_map_1.py",
-            APP_DIR / "streamlit_geotiff_map.py",
-        ]
-    )
-    found = _first_existing(candidates)
-    return found if found is not None else candidates[0]
-
-
-SATELLITE_APP_SCRIPT = _resolve_satellite_app_script()
-SATELLITE_APP_PORT = 8512
 APP_HEADER_TITLE = "Εφαρμογή Ανάλυσης Ποιότητας Επιφανειακών Υδάτων για τον Ταμιευτήρα Γαδουρά ΕΥΑΘ ΑΕ"
 APP_HEADER_SUBTITLE = "Οπτικοποίηση δορυφορικών GeoTIFF και επικυρωμένων μετρήσεων"
 APP_LOGO_URL = "https://chatbot.eyath.gr/_astro/eyath-logo-2.DriaSExn_1jOI34.svg"
-
-
-def _is_port_open(port: int) -> bool:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(0.35)
-    try:
-        return sock.connect_ex(("127.0.0.1", int(port))) == 0
-    finally:
-        sock.close()
-
-
-def _ensure_satellite_app_running(script_path: Path, port: int) -> Tuple[bool, bool]:
-    if _is_port_open(port):
-        return True, False
-    if not script_path.exists():
-        return False, False
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "streamlit",
-        "run",
-        str(script_path),
-        "--server.headless=true",
-        f"--server.port={int(port)}",
-    ]
-    try:
-        subprocess.Popen(
-            cmd,
-            cwd=str(script_path.parent),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return False, False
-
-    for _ in range(25):
-        if _is_port_open(port):
-            return True, True
-        time.sleep(0.25)
-    return False, True
 
 
 def render_main_header() -> None:
@@ -174,29 +118,26 @@ def render_main_header() -> None:
 
 
 def render_satellite_data_view() -> None:
-    if not SATELLITE_APP_SCRIPT.exists():
-        st.error(f"Δεν βρέθηκε το αρχείο: {SATELLITE_APP_SCRIPT}")
+    try:
+        satellite_app = importlib.import_module("streamlit_geotiff_map_1")
+    except Exception as exc:
+        st.error("Αποτυχία φόρτωσης της ενότητας δορυφορικών δεδομένων.")
+        st.caption(f"Module import error: {exc}")
         return
 
-    ok, started_now = _ensure_satellite_app_running(SATELLITE_APP_SCRIPT, SATELLITE_APP_PORT)
-    if not ok:
-        st.error("Δεν ήταν δυνατή η εκκίνηση της εφαρμογής δορυφορικών δεδομένων.")
-        st.caption(
-            f"Δοκίμασε χειροκίνητα: `python -m streamlit run \"{SATELLITE_APP_SCRIPT}\" --server.port={SATELLITE_APP_PORT}`"
-        )
+    render_fn = getattr(satellite_app, "render_satellite_dashboard", None)
+    if not callable(render_fn):
+        st.error("Το module `streamlit_geotiff_map_1.py` δεν εκθέτει τη συνάρτηση `render_satellite_dashboard`.")
         return
 
-    if started_now:
-        st.success("Εκκινήθηκε η προβολή δορυφορικών δεδομένων.")
-
-    base_url = f"http://localhost:{SATELLITE_APP_PORT}"
-    # Use embed mode to avoid clipping from the inner Streamlit top toolbar.
-    # Add cache-buster based on script mtime so browser always gets latest labels/UI text.
-    cache_tag = int(SATELLITE_APP_SCRIPT.stat().st_mtime) if SATELLITE_APP_SCRIPT.exists() else 0
-    iframe_url = f"{base_url}/?embed=true&hide_header=1&v={cache_tag}"
-    st.link_button("Άνοιγμα σε νέο παράθυρο", base_url)
-    components.iframe(iframe_url, height=1160, scrolling=True)
-    st.caption(f"Πηγή προβολής: {SATELLITE_APP_SCRIPT}")
+    st.caption(f"Storage root: `{PLATFORM_ROOT}`")
+    st.caption(f"Satellite source root: `{SATELLITE_DATA_ROOT}`")
+    try:
+        # Render inline in the same Streamlit process (Cloud-safe; no localhost iframe).
+        render_fn(show_header=False, show_footer=False, show_debug=False, apply_css=False)
+    except Exception as exc:
+        st.error("Αποτυχία προβολής δορυφορικών δεδομένων.")
+        st.caption(f"Render error: {exc}")
 
 # ─── Sampling point coordinates (from docx) ───────────────────────────────────
 SAMPLING_POINTS = {
@@ -404,9 +345,9 @@ def load_level_data(root: str) -> pd.DataFrame:
     ]
     candidates: list[Path] = []
     for pat in patterns:
-        candidates.extend(sorted(base.glob(pat)))
+        candidates.extend(sorted(base.rglob(pat)))
     if not candidates:
-        candidates = sorted(base.glob("*.csv"))
+        candidates = sorted(base.rglob("*.csv"))
 
     # Deduplicate while preserving order.
     seen = set()
@@ -633,7 +574,7 @@ def resolve_excel_path(preferred_name):
     target_key = _simplify_name(preferred_path.name)
     xlsx_files = []
     for d in search_dirs:
-        xlsx_files.extend(sorted(d.glob("*.xlsx")))
+        xlsx_files.extend(sorted(d.rglob("*.xlsx")))
 
     dedup = {}
     for p in xlsx_files:
@@ -791,29 +732,6 @@ map_df = pd.DataFrame([
     }
     for k, v in SAMPLING_POINTS.items()
 ])
-
-def build_sampling_map(height=550, title=None):
-    fig_map = px.scatter_mapbox(
-        map_df,
-        lat="lat", lon="lon",
-        text="Σημείο",
-        color="Μετρήσεις",
-        size=[20] * len(map_df),
-        color_continuous_scale="Blues",
-        hover_data={"Σημείο": True, "lat": True, "lon": True, "Μετρήσεις": True},
-        zoom=13,
-        center={"lat": 36.172, "lon": 27.988},
-        mapbox_style="open-street-map",
-        title=title,
-        height=height,
-    )
-    fig_map.update_traces(
-        marker=dict(size=16),
-        textposition="top center",
-        textfont=dict(size=13, color="black")
-    )
-    fig_map.update_layout(margin={"r": 0, "t": 40 if title else 10, "l": 0, "b": 0})
-    return fig_map
 
 # Dynamic parameter-based map (overrides the simple counts-only version above)
 MAP_POINTS_DF = pd.DataFrame([

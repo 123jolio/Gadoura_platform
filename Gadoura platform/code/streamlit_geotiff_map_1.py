@@ -11,7 +11,6 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 import re
-import os
 
 import altair as alt
 import folium
@@ -23,8 +22,21 @@ from streamlit_folium import st_folium
 
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-APP_DIR      = Path(__file__).resolve().parent
-PLATFORM_ROOT = APP_DIR
+APP_DIR = Path(__file__).resolve().parent
+
+def _resolve_platform_root(app_dir: Path) -> Path:
+    # Supports both layouts:
+    # 1) script at repo root with sibling data folders
+    # 2) script under `code/` with data folders at parent
+    direct_has_data = (app_dir / "satellite data").exists() or (app_dir / "field data").exists()
+    parent_has_data = (app_dir.parent / "satellite data").exists() or (app_dir.parent / "field data").exists()
+    if direct_has_data:
+        return app_dir
+    if parent_has_data:
+        return app_dir.parent
+    return app_dir
+
+PLATFORM_ROOT = _resolve_platform_root(APP_DIR)
 SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
 DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
 
@@ -780,30 +792,31 @@ def section_level() -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════════════════════
-def main() -> None:
-    st.set_page_config(
-        page_title="Ταμιευτήρας Γαδουρά · ΕΥΑΘ",
-        page_icon="🛰️",
-        layout="wide",
-        initial_sidebar_state="collapsed",
-    )
-    st.markdown(CSS, unsafe_allow_html=True)
+def render_satellite_dashboard(
+    show_header: bool = True,
+    show_footer: bool = True,
+    show_debug: bool = False,
+    apply_css: bool = True,
+) -> None:
+    if apply_css:
+        st.markdown(CSS, unsafe_allow_html=True)
 
     # ── Header ──────────────────────────────────────────────────────────────
-    logo = resolve_logo()
-    st.markdown(
-        f"""<div class="hcard">
-              <img src="{logo}" style="height:60px;object-fit:contain;flex-shrink:0;"
-                   onerror="this.style.display='none'" />
-              <div>
-                <h1>Εφαρμογή Παρακολούθησης Ποιότητας Επιφανειακών Υδάτων<br>
-                    Ταμιευτήρα Γαδουρά &nbsp;·&nbsp; ΕΥΑΘ ΑΕ</h1>
-                <div class="sub">Οπτικοποίηση δορυφορικών GeoTIFF &amp; επικυρωμένων μετρήσεων in-situ</div>
-                <span class="badge">🛰️ Sentinel-2 · Rhodes, GR</span>
-              </div>
-            </div>""",
-        unsafe_allow_html=True,
-    )
+    if show_header:
+        logo = resolve_logo()
+        st.markdown(
+            f"""<div class="hcard">
+                  <img src="{logo}" style="height:60px;object-fit:contain;flex-shrink:0;"
+                       onerror="this.style.display='none'" />
+                  <div>
+                    <h1>Εφαρμογή Παρακολούθησης Ποιότητας Επιφανειακών Υδάτων<br>
+                        Ταμιευτήρα Γαδουρά &nbsp;·&nbsp; ΕΥΑΘ ΑΕ</h1>
+                    <div class="sub">Οπτικοποίηση δορυφορικών GeoTIFF &amp; επικυρωμένων μετρήσεων in-situ</div>
+                    <span class="badge">🛰️ Sentinel-2 · Rhodes, GR</span>
+                  </div>
+                </div>""",
+            unsafe_allow_html=True,
+        )
 
     # ── Case selector ────────────────────────────────────────────────────────
     st.markdown("<div class='slabel'>Επιλογή Θεματικής Ενότητας</div>",
@@ -930,23 +943,35 @@ def main() -> None:
             section_turbidity()
 
     # ── Footer ───────────────────────────────────────────────────────────────
-    st.markdown(
-        "<div style='text-align:center;margin-top:3rem;font-size:.68rem;"
-        "color:#2b5570;letter-spacing:.08em;font-family:'Syne',sans-serif;'>"
-        "ΕΥΑΘ ΑΕ &nbsp;·&nbsp; Ταμιευτήρας Γαδουρά &nbsp;·&nbsp; "
-        "Δορυφορική Παρακολούθηση &nbsp;·&nbsp; Sentinel-2</div>",
-        unsafe_allow_html=True,
-    )
+    if show_footer:
+        st.markdown(
+            "<div style='text-align:center;margin-top:3rem;font-size:.68rem;"
+            "color:#2b5570;letter-spacing:.08em;font-family:'Syne',sans-serif;'>"
+            "ΕΥΑΘ ΑΕ &nbsp;·&nbsp; Ταμιευτήρας Γαδουρά &nbsp;·&nbsp; "
+            "Δορυφορική Παρακολούθηση &nbsp;·&nbsp; Sentinel-2</div>",
+            unsafe_allow_html=True,
+        )
 
     # ── Debug ────────────────────────────────────────────────────────────────
-    with st.expander("🔧 Πληροφορίες διαδρομών", expanded=False):
-        st.code(
-            f"Script        : {Path(__file__).resolve()}\n"
-            f"GADOURA_ROOT  : {GADOURA_ROOT}\n"
-            f"DATA_ROOT     : {DATA_ROOT}\n"
-            f"Active folder : {folder}",
-            language="text",
-        )
+    if show_debug:
+        with st.expander("🔧 Πληροφορίες διαδρομών", expanded=False):
+            st.code(
+                f"Script        : {Path(__file__).resolve()}\n"
+                f"GADOURA_ROOT  : {GADOURA_ROOT}\n"
+                f"DATA_ROOT     : {DATA_ROOT}\n"
+                f"Active folder : {folder}",
+                language="text",
+            )
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title="Ταμιευτήρας Γαδουρά · ΕΥΑΘ",
+        page_icon="🛰️",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+    render_satellite_dashboard(show_header=True, show_footer=True, show_debug=True, apply_css=True)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import numpy as np
 import openpyxl
@@ -11,21 +11,13 @@ import re
 from pathlib import Path
 from io import BytesIO
 import time
+import importlib
 import os
 import json
 import math
-import socket
-import subprocess
-import sys
 from typing import Any, Dict, Optional, Tuple
-import streamlit.components.v1 as components
 
-try:
-    import startup  # noqa: F401
-except Exception:
-    pass
-
-# --- Dark Plotly theme --------------------------------------------------------
+# ── Dark Plotly theme ─────────────────────────────────────────────────────────
 _PLT_BG   = "#09111f"
 _PLT_PAPER= "#0d1e2f"
 _PLT_GRID = "rgba(56,189,248,.07)"
@@ -84,103 +76,30 @@ st.set_page_config(
 )
 
 APP_DIR = Path(__file__).resolve().parent
-PLATFORM_ROOT = Path(os.getenv("GADOURA_PLATFORM_ROOT", "/tmp/gadoura")).expanduser().resolve()
-DRIVE_SYNC_STATUS = "startup sync active"
-CODE_ROOT = Path(
-    os.getenv("GADOURA_CODE_ROOT", str(APP_DIR))
-).expanduser().resolve()
-FIELD_DATA_ROOT = Path(
-    os.getenv("GADOURA_FIELD_DATA_ROOT", str(PLATFORM_ROOT / "field data"))
-).expanduser().resolve()
-SATELLITE_DATA_ROOT = Path(
-    os.getenv("GADOURA_SATELLITE_DATA_ROOT", str(PLATFORM_ROOT / "satellite data"))
-).expanduser().resolve()
-SHARED_DATA_ROOT = Path(
-    os.getenv("GADOURA_DATA_ROOT", str(SATELLITE_DATA_ROOT / "DATA"))
-).expanduser().resolve()
+def _resolve_platform_root(app_dir: Path) -> Path:
+    # Supports both layouts:
+    # 1) script at repo root with sibling data folders
+    # 2) script under `code/` with data folders at parent
+    direct_has_data = (app_dir / "satellite data").exists() or (app_dir / "field data").exists()
+    parent_has_data = (app_dir.parent / "satellite data").exists() or (app_dir.parent / "field data").exists()
+    if direct_has_data:
+        return app_dir
+    if parent_has_data:
+        return app_dir.parent
+    return app_dir
+
+PLATFORM_ROOT = _resolve_platform_root(APP_DIR)
+FIELD_DATA_ROOT = PLATFORM_ROOT / "field data"
+SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
+SHARED_DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
 if not SHARED_DATA_ROOT.exists():
     legacy_data_root = PLATFORM_ROOT / "DATA"
     if legacy_data_root.exists():
-        SHARED_DATA_ROOT = legacy_data_root.resolve()
+        SHARED_DATA_ROOT = legacy_data_root
 
-
-def _first_existing(paths: list[Path]) -> Optional[Path]:
-    for p in paths:
-        if p.exists():
-            return p
-    return None
-
-
-def _resolve_satellite_app_script() -> Path:
-    env_script = os.getenv("GADOURA_SATELLITE_APP_SCRIPT", "").strip()
-    candidates: list[Path] = []
-    if env_script:
-        candidates.append(Path(env_script).expanduser())
-
-    # Canonical priority:
-    # 1) Explicit env override
-    # 2) Deploy viewer in code/app folder
-    # 3) Legacy viewers
-    candidates.extend(
-        [
-            CODE_ROOT / "streamlit_geotiff_map_1_deploy.py",
-            APP_DIR / "streamlit_geotiff_map_1_deploy.py",
-            CODE_ROOT / "streamlit_geotiff_map_1.py",
-            APP_DIR / "streamlit_geotiff_map_1.py",
-            CODE_ROOT / "streamlit_geotiff_map.py",
-            APP_DIR / "streamlit_geotiff_map.py",
-        ]
-    )
-    found = _first_existing(candidates)
-    return found if found is not None else candidates[0]
-
-
-SATELLITE_APP_SCRIPT = _resolve_satellite_app_script()
-SATELLITE_APP_PORT = 8512
 APP_HEADER_TITLE = "Εφαρμογή Ανάλυσης Ποιότητας Επιφανειακών Υδάτων για τον Ταμιευτήρα Γαδουρά ΕΥΑΘ ΑΕ"
 APP_HEADER_SUBTITLE = "Οπτικοποίηση δορυφορικών GeoTIFF και επικυρωμένων μετρήσεων"
 APP_LOGO_URL = "https://chatbot.eyath.gr/_astro/eyath-logo-2.DriaSExn_1jOI34.svg"
-
-
-def _is_port_open(port: int) -> bool:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(0.35)
-    try:
-        return sock.connect_ex(("127.0.0.1", int(port))) == 0
-    finally:
-        sock.close()
-
-
-def _ensure_satellite_app_running(script_path: Path, port: int) -> Tuple[bool, bool]:
-    if _is_port_open(port):
-        return True, False
-    if not script_path.exists():
-        return False, False
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "streamlit",
-        "run",
-        str(script_path),
-        "--server.headless=true",
-        f"--server.port={int(port)}",
-    ]
-    try:
-        subprocess.Popen(
-            cmd,
-            cwd=str(script_path.parent),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        return False, False
-
-    for _ in range(25):
-        if _is_port_open(port):
-            return True, True
-        time.sleep(0.25)
-    return False, True
 
 
 def render_main_header() -> None:
@@ -196,36 +115,31 @@ def render_main_header() -> None:
             </div>""",
         unsafe_allow_html=True,
     )
-    if DRIVE_SYNC_STATUS and "disabled" not in DRIVE_SYNC_STATUS.lower():
-        st.caption(f"Storage root: `{PLATFORM_ROOT}` | {DRIVE_SYNC_STATUS}")
 
 
 def render_satellite_data_view() -> None:
-    if not SATELLITE_APP_SCRIPT.exists():
-        st.error(f"Δεν βρέθηκε το αρχείο: {SATELLITE_APP_SCRIPT}")
+    try:
+        satellite_app = importlib.import_module("streamlit_geotiff_map_1")
+    except Exception as exc:
+        st.error("Αποτυχία φόρτωσης της ενότητας δορυφορικών δεδομένων.")
+        st.caption(f"Module import error: {exc}")
         return
 
-    ok, started_now = _ensure_satellite_app_running(SATELLITE_APP_SCRIPT, SATELLITE_APP_PORT)
-    if not ok:
-        st.error("Δεν ήταν δυνατή η εκκίνηση της εφαρμογής δορυφορικών δεδομένων.")
-        st.caption(
-            f"Δοκίμασε χειροκίνητα: `python -m streamlit run \"{SATELLITE_APP_SCRIPT}\" --server.port={SATELLITE_APP_PORT}`"
-        )
+    render_fn = getattr(satellite_app, "render_satellite_dashboard", None)
+    if not callable(render_fn):
+        st.error("Το module `streamlit_geotiff_map_1.py` δεν εκθέτει τη συνάρτηση `render_satellite_dashboard`.")
         return
 
-    if started_now:
-        st.success("Εκκινήθηκε η προβολή δορυφορικών δεδομένων.")
+    st.caption(f"Storage root: `{PLATFORM_ROOT}`")
+    st.caption(f"Satellite source root: `{SATELLITE_DATA_ROOT}`")
+    try:
+        # Render inline in the same Streamlit process (Cloud-safe; no localhost iframe).
+        render_fn(show_header=False, show_footer=False, show_debug=False, apply_css=False)
+    except Exception as exc:
+        st.error("Αποτυχία προβολής δορυφορικών δεδομένων.")
+        st.caption(f"Render error: {exc}")
 
-    base_url = f"http://localhost:{SATELLITE_APP_PORT}"
-    # Use embed mode to avoid clipping from the inner Streamlit top toolbar.
-    # Add cache-buster based on script mtime so browser always gets latest labels/UI text.
-    cache_tag = int(SATELLITE_APP_SCRIPT.stat().st_mtime) if SATELLITE_APP_SCRIPT.exists() else 0
-    iframe_url = f"{base_url}/?embed=true&hide_header=1&v={cache_tag}"
-    st.link_button("Άνοιγμα σε νέο παράθυρο", base_url)
-    components.iframe(iframe_url, height=1160, scrolling=True)
-    st.caption(f"Πηγή προβολής: {SATELLITE_APP_SCRIPT}")
-
-# --- Sampling point coordinates (from docx) ----------------------------------
+# ─── Sampling point coordinates (from docx) ───────────────────────────────────
 SAMPLING_POINTS = {
     0: {"lat": 36.1586669, "lon": 27.994512},
     1: {"lat": 36.162806,  "lon": 27.997548},
@@ -238,7 +152,7 @@ SAMPLING_POINTS = {
     8: {"lat": 36.180363,  "lon": 27.969781},
 }
 
-# --- Column mapping (0-based index in row) -----------------------------------
+# ─── Column mapping (0-based index in row) ────────────────────────────────────
 COL_MAP = {
     "pH": 3,
     "Θερμοκρασία (°C)": 4,
@@ -585,7 +499,7 @@ def render_level_tab() -> None:
     fig.update_yaxes(showgrid=True, gridcolor=_PLT_GRID, linecolor=_PLT_LINE)
     st.plotly_chart(fig, use_container_width=True, theme=None)
 
-# --- Top-level header and view selector --------------------------------------
+# ─── Top-level header and view selector ───────────────────────────────────────
 render_main_header()
 
 MAIN_VIEW_OPTIONS = ["Δορυφορικά δεδομένα", "Μετρήσεις πεδίου"]
@@ -613,7 +527,7 @@ if selected_main_view == "Δορυφορικά δεδομένα":
     render_satellite_data_view()
     st.stop()
 
-# --- Load data ----------------------------------------------------------------
+# ─── Load data ─────────────────────────────────────────────────────────────────
 EXCEL_PATH = "ΑΠΟΤΕΛΕΣΜΑΤΑ_ΔΟΡΥΦΟΡΙΚΗΣ_ΠΑΡΑΚΟΛΟΥΘΗΣΗΣ_ΦΡΑΓΜΑΤΟΣ_2025-2026_ΕΥΑΘ.xlsx"
 
 def _simplify_name(name):
@@ -708,8 +622,8 @@ if df.empty or "date" not in df.columns:
 
 st.caption(f"Πηγή δεδομένων μετρήσεων πεδίου (Excel): `{MEASUREMENTS_SOURCE_PATH}`")
 
-# --- CSS ----------------------------------------------------------------------
-# --- Dark theme CSS (matches streamlit_geotiff_map_1.py) ---------------------
+# ─── CSS ───────────────────────────────────────────────────────────────────────
+# ── Dark theme CSS (matches streamlit_geotiff_map_1.py) ──────────────────────
 CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Noto+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -788,7 +702,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 st.markdown("---")
 
-# --- Summary metrics ----------------------------------------------------------
+# ─── Summary metrics ───────────────────────────────────────────────────────────
 col1, col2, col3, col4 = st.columns(4)
 dates = sorted(df["date"].unique())
 with col1:
@@ -1177,7 +1091,7 @@ with st.sidebar:
     st.dataframe(legend_view, use_container_width=True, hide_index=True, height=220)
     st.caption("Ο χάρτης παραμένει ορατός σε όλα τα διαγράμματα.")
 
-# --- TABS ---------------------------------------------------------------------
+# ─── TABS ──────────────────────────────────────────────────────────────────────
 GEE_PARAMETER_OPTIONS = [
     "Water Surface Temperature - Surface Temperature (°C)",
     "True Color - RGB",
@@ -1964,7 +1878,7 @@ with tab_gee:
             with d1:
                 gee_start = st.date_input("Start date", value=pd.to_datetime("2023-01-01"), key="gee_start")
             with d2:
-                gee_end = st.date_input("End date", value=pd.Timestamp.today().date(), key="gee_end")
+                gee_end = st.date_input("End date", value=pd.to_datetime("today"), key="gee_end")
 
         map_col, ctrl_col = st.columns([1.8, 1.2], gap='large')
         with map_col:
@@ -2487,7 +2401,7 @@ with tab_ts:
                 st.info("Depth-Time Heatmap needs at least 2 dates and 2 depth levels for the selected point.")
 
             # 2) Stratification time series (surface - deep)
-            temp_col = next((c for c in df.columns if "°C" in c), None)
+            temp_col = next((c for c in df.columns if "°C" in c or "°C" in c), None)
             do_col = next((c for c in df.columns if "DO" in c), None)
             strat_cols = [c for c in [temp_col, do_col] if c]
             if strat_cols:
