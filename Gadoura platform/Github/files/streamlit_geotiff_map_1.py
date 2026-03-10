@@ -85,6 +85,8 @@ CASE_CONFIG = [
         "label_full": "ΣΥΓΚΕΝΤΡΩΣΕΙΣ ΧΛΩΡΟΦΥΛΛΗΣ",
         "icon":  "🟢",
         "folders": [
+            # Support both spellings found across datasets/repos.
+            GADOURA_ROOT / "Chlorophyl_validated"  / "code" / "GeoTIFFs",
             GADOURA_ROOT / "Chlorophyll_validated" / "code" / "GeoTIFFs",
             GADOURA_ROOT / "Chlorophyll"           / "GeoTIFFs",
         ],
