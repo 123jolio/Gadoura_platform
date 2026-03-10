@@ -1,0 +1,81 @@
+/*
+ * ============================================================================
+ * Gadouras Reservoir — Chl-a Poly2 Custom Script  (Sentinel Hub / EO Browser)
+ * EYATH 2025 | N=20 | R²=0.59 | RMSE≈4.68 µg/L
+ * Chla [µg/L] = −61.626324·NDCI + 10.348804 − 58.284377·NDCI²
+ * NDCI = (B05 − B04) / (B05 + B04)
+ * ============================================================================
+ */
+
+// ── FLAG: 0 = Black land  |  1 = NDVI green  |  2 = True Colour ─────────────
+var FLAGbackground = 2;
+
+// ── BAND DECLARATION (required for mixed 10 m / 20 m bands) ─────────────────
+function setup() {
+  return {
+    input: [{
+      bands: ["B02", "B03", "B04", "B05", "B08"],
+      units: "REFLECTANCE"
+    }],
+    output: {
+      bands: 3,
+      sampleType: "AUTO"
+    }
+  };
+}
+
+// ── COLOUR SCALE (6 stops, 0–35 µg/L) ────────────────────────────────────────
+// Deep navy → cobalt → steel blue → pale green → amber → red
+var scaleChla = [0, 5, 10, 15, 25, 35];
+
+var colorScale = [
+  [ 8/255,  48/255, 107/255],   // #08306B  < 5  µg/L  oligotrophic
+  [33/255, 113/255, 181/255],   // #2171B5  5–10 µg/L
+  [107/255,174/255, 214/255],   // #6BAED6  10–15 µg/L mesotrophic
+  [199/255,233/255, 180/255],   // #C7E9B4  15–25 µg/L
+  [253/255,174/255,  97/255],   // #FDAE61  25–35 µg/L eutrophic
+  [215/255, 48/255,  31/255]    // #D73027  > 35 µg/L  bloom alert
+];
+
+// ── MAIN PIXEL FUNCTION ───────────────────────────────────────────────────────
+function evaluatePixel(s) {
+
+  // Raw reflectance values
+  var B02 = s.B02;
+  var B03 = s.B03;
+  var B04 = s.B04;
+  var B05 = s.B05;
+  var B08 = s.B08;
+
+  // Water/land separator — NDWI (McFeeters): positive = water
+  var NDWI = (B03 - B08) / (B03 + B08 + 0.0001);
+
+  // ── Land pixel ─────────────────────────────────────────────────────────────
+  if (NDWI < 0) {
+    if (FLAGbackground === 0) {
+      return [0, 0, 0];                                    // black
+
+    } else if (FLAGbackground === 1) {
+      var NDVI = (B08 - B04) / (B08 + B04 + 0.0001);
+      return [0, 0.5 * (NDVI + 1), 0];                    // NDVI green
+
+    } else {
+      return [B04 * 2.5, B03 * 2.5, B02 * 2.5];           // true colour
+    }
+  }
+
+  // ── Water pixel — Gadouras Poly2 Chl-a ────────────────────────────────────
+
+  // NDCI — Normalised Difference Chlorophyll Index
+  var NDCI = (B05 - B04) / (B05 + B04 + 0.0001);
+
+  // Poly2 model  (EYATH 2025, OLS, N=20)
+  var Chla = (-61.626324 * NDCI)
+            + 10.348804
+            + (-58.284377 * NDCI * NDCI);
+
+  // Clamp to colour scale range to avoid palette overflow
+  Chla = Math.max(scaleChla[0], Math.min(Chla, scaleChla[scaleChla.length - 1]));
+
+  return colorBlend(Chla, scaleChla, colorScale);
+}

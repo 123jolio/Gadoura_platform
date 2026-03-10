@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "ee-lioumbas",
+  "private_key_id": "7573d7cf87e994500e44f975fa9049d4992a64b9",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCb5Ou3E81dsrJ6\nKR+hVphIMAEvrNakW0a9fC0qV5nCJcmJZC40JWDXo+zBqdeyv5RcIHfGuniD8UB4\nsW4M6IRwEOcNkP9UpM+9JNoYUXZaI7TeRrkMg/WAIlEDuvf94RfGUvwzqTAx8TGa\nj7B+ezP76Ber4xORlZKSp7KQ6bHd9IiJDntUy0o2JUszGMAs/36b//7/4u/rYDB6\nG6zMcdq5bMLuVvTqmb54f4Fijc+MpnwT5XYqQWqZRYcBK0q/xkDBP7S6HNFUQaAj\njZTy/lcviXMLIiIrlE0vPR2xbT+ktFD3dhb0nlgKNhZDc6S0W1f+2TW4HEuQAjPX\nx13guy6XAgMBAAECggEAEkgawmn+k+XgW0YWUP/MNO74PKSKuVSA67izvTrvq55t\nz4BhkLjvbepp2d42jt47okAme7YjaumwU1cPXlEoMtIwnl0qLD11pSs8rkxjUjfM\nvqJRkh+peyDLGmJjMbEjbh0OOWq2Xaz40bTXEEYXdwulNwGWqmR9f1hOLwNQ2gPj\n4iIgI1P0C18GrPBxs6awn5hJbgIf+EGAfqu5ATJBHtieR0x9Xzjfn3kbz4DylCBM\nlawPSt1HEsobZ7TxbuUbh5MX3NwPOWmRYVnWxGKlBpYzmDxsBouqao3BJBuPmTM5\nTjfQqyGNPZsnVLE5etDmNvzg8WQcrA4fHtoVT1aN9QKBgQDIY30Xtra4rGR/j+XD\n2GrsXfHt+ZLaG7yH3YARYTBBSYOFJVwEEpm+AN0yNol4pNluh2OAeZxvMgIslxPL\nfO4qOzpDNxSdjkQYosK7Q5AC2MWxxFjTQuhbEy25WBTL2wmUIPhJWpUxQbT/CZ1k\n+ADzUAASfDgrtxZv5EUUxK9zXQKBgQDHKFlWPsuohwk5sXOeNhbRnvBFNfXRNtU/\ng7wtjOPjpbbwnBp6q9tVT8nFhEuNafp/JtvlgQ89yXQUFnCpc/Ui6Ji5LcMqYY1z\nJ1lgrl41628XyIa2wJPMMjSKzzRSQMmdh2Tf8LulBVj4uDYTGYYT4MJjupCy3qx4\nuP55foNegwKBgBZXmVvqgEbo2a+rUJfcald+RfodiHUPAJ85YA0QA/xTgPl4Z+EA\nXenkWMU/dWZhIukC6WIqrPls3vcvxQI8JKXKwr05x++lLAx/IS0V5Fmc57XhSXIM\nlLGK2t8+ZdswycmdP3GWSuoaBF8nKEhYqmp2cfudo/mjyTmift1I7LL1AoGBAMJD\nE1FTE2ihv1ftRa/PZta1x/xatBqM99lqcEWmJixJ2nY8bn+13s4Kc/AcKW4ZL+ST\nTO9CwlEsjfOCKAbCOxz/8OjAQJy4Zzcp7L6nlvHVYpm6Wd0tX31Qg3vavVh2JbNo\n+/aMZRyEaNLDLMvYm7YMCNEqjDZNicKAAIkV5KJtAoGAJqqQXnw0lQew2RV6tJ9R\nKunenU6GkFJu+39dPJnDHamWGmgsFcIjNmcxnPz5sp5JdCVvfaCjCaV5P2kr3FUs\nEkYvzwZUCFGzCnwxoUdtvt4UaTavxCc1nSQ6ZTkJUU2QLRRYAdQ+BT6/SqyxqpAT\nbCLD1cKPhFfYiEUYz0nk7Xw=\n-----END PRIVATE KEY-----\n",
+  "client_email": "eyath-hydrosuite-streamlit@ee-lioumbas.iam.gserviceaccount.com",
+  "client_id": "112408820924849995441",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/eyath-hydrosuite-streamlit%40ee-lioumbas.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
