@@ -59,11 +59,10 @@ TURBIDITY_SCALE_IMAGE_NAME = "output.png"
 # ── Alert thresholds ─────────────────────────────────────────────────────────
 CHL_ALERT_THRESHOLD        = 24.0   # µg/L  — moderate alert (WHO 2021)
 TURBIDITY_ALERT_THRESHOLD  = 1.85   # NDTI  — calibrated to reservoir
-LEVEL_WARNING_M            = 95.0   # masl  — operational warning level  ← adjust
-LEVEL_CRITICAL_M           = 90.0   # masl  — operational minimum        ← adjust
+LEVEL_WARNING_M            = 95.0   # masl  — operational warning level
+LEVEL_CRITICAL_M           = 90.0   # masl  — operational minimum
 LEVEL_DRAWDOWN_DAYS        = 7      # days  — window for rate-of-change
-DATA_FRESHNESS_DAYS        = 18     # days  — warn if latest image is older
-
+DATA_FRESHNESS_DAYS        = 18     # days  — alert if latest image is older
 
 
 def _resolve_profile_line_kmz() -> Path:
@@ -1252,6 +1251,8 @@ def main() -> None:
                               options=files, format_func=lambda x: x["name"])
 
     with st.spinner("Φόρτωση εικόνας από Drive…"):
+        if not chosen.get("ready", True):
+            st.info("Πρώτη λήψη GeoTIFF από Drive. Μπορεί να χρειαστεί 30-120 δευτερόλεπτα.")
         img, bounds, center = load_tif(chosen["path"])
 
     if img is None:
