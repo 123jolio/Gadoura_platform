@@ -27,15 +27,13 @@ from streamlit_folium import st_folium
 APP_DIR = Path(__file__).resolve().parent
 
 def _resolve_platform_root(app_dir: Path) -> Path:
-    # Supports both layouts:
-    # 1) script at repo root with sibling data folders
-    # 2) script under `code/` with data folders at parent
-    direct_has_data = (app_dir / "satellite data").exists() or (app_dir / "field data").exists()
-    parent_has_data = (app_dir.parent / "satellite data").exists() or (app_dir.parent / "field data").exists()
-    if direct_has_data:
-        return app_dir
-    if parent_has_data:
-        return app_dir.parent
+    # Search upwards so this works for:
+    # - repo root
+    # - code/
+    # - code/mobile version/
+    for candidate in [app_dir, *app_dir.parents]:
+        if (candidate / "satellite data").exists() or (candidate / "field data").exists():
+            return candidate
     return app_dir
 
 PLATFORM_ROOT = _resolve_platform_root(APP_DIR)
@@ -55,6 +53,8 @@ LOGO_URL = "https://chatbot.eyath.gr/_astro/eyath-logo-2.DriaSExn_1jOI34.svg"
 DATE_RE  = re.compile(r"(?P<y>\d{4})_(?P<m>\d{2})_(?P<d>\d{2})")
 PROFILE_LINE_KMZ_NAME = "Γραμμή.kmz"
 TURBIDITY_SCALE_IMAGE_NAME = "output.png"
+CHL_ALERT_THRESHOLD = 24.0
+TURBIDITY_ALERT_THRESHOLD = 1.85
 
 
 def _resolve_profile_line_kmz() -> Path:
@@ -563,6 +563,69 @@ def load_turbidity_avg(csv: str) -> pd.DataFrame:
     return out
 
 
+def _extract_alarm_rows(df: pd.DataFrame, value_col: str, threshold: float) -> pd.DataFrame:
+    if df.empty or "date" not in df.columns or value_col not in df.columns:
+        return pd.DataFrame(columns=["date", "value"])
+    alarms = df.loc[df[value_col] > threshold, ["date", value_col]].copy()
+    alarms = alarms.rename(columns={value_col: "value"})
+    alarms["date"] = pd.to_datetime(alarms["date"], errors="coerce").dt.normalize()
+    alarms = alarms.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+    return alarms
+
+
+def _build_alarm_correlation(chl_avg: pd.DataFrame, turb_avg: pd.DataFrame) -> dict:
+    empty = {
+        "chl_alarm_count": 0,
+        "turb_alarm_count": 0,
+        "shared_alarm_count": 0,
+        "jaccard": np.nan,
+        "chl_overlap": np.nan,
+        "turb_overlap": np.nan,
+        "pearson": np.nan,
+        "paired_points": 0,
+        "shared_dates": [],
+    }
+    if chl_avg.empty or turb_avg.empty:
+        return empty
+    if "date" not in chl_avg.columns or "value" not in chl_avg.columns:
+        return empty
+    if "date" not in turb_avg.columns or "satellite" not in turb_avg.columns:
+        return empty
+
+    chl = chl_avg[["date", "value"]].copy()
+    turb = turb_avg[["date", "satellite"]].copy()
+    chl["date"] = pd.to_datetime(chl["date"], errors="coerce").dt.normalize()
+    turb["date"] = pd.to_datetime(turb["date"], errors="coerce").dt.normalize()
+    chl = chl.dropna(subset=["date", "value"]).groupby("date", as_index=False)["value"].mean()
+    turb = turb.dropna(subset=["date", "satellite"]).groupby("date", as_index=False)["satellite"].mean()
+
+    chl_alarm_dates = set(chl.loc[chl["value"] > CHL_ALERT_THRESHOLD, "date"])
+    turb_alarm_dates = set(turb.loc[turb["satellite"] > TURBIDITY_ALERT_THRESHOLD, "date"])
+    shared_dates = sorted(chl_alarm_dates & turb_alarm_dates)
+    union_count = len(chl_alarm_dates | turb_alarm_dates)
+
+    aligned = chl.rename(columns={"value": "chl"}).merge(
+        turb.rename(columns={"satellite": "turb"}),
+        on="date",
+        how="inner",
+    )
+    pearson = np.nan
+    if len(aligned) >= 2:
+        pearson = float(aligned["chl"].corr(aligned["turb"], method="pearson"))
+
+    return {
+        "chl_alarm_count": len(chl_alarm_dates),
+        "turb_alarm_count": len(turb_alarm_dates),
+        "shared_alarm_count": len(shared_dates),
+        "jaccard": (len(shared_dates) / union_count) if union_count else np.nan,
+        "chl_overlap": (len(shared_dates) / len(chl_alarm_dates)) if chl_alarm_dates else np.nan,
+        "turb_overlap": (len(shared_dates) / len(turb_alarm_dates)) if turb_alarm_dates else np.nan,
+        "pearson": pearson,
+        "paired_points": len(aligned),
+        "shared_dates": [d.strftime("%Y-%m-%d") for d in shared_dates],
+    }
+
+
 @st.cache_data(show_spinner=False)
 def load_level(root: str) -> pd.DataFrame:
     r = Path(root)
@@ -663,6 +726,8 @@ def section_chlorophyll() -> None:
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1)
             avg = avg.copy()
             avg["display"] = avg["value"].rolling(smooth, min_periods=1).mean()
+            avg["chl_alarm"] = avg["value"] > CHL_ALERT_THRESHOLD
+            chl_alarm_rows = _extract_alarm_rows(avg, "value", CHL_ALERT_THRESHOLD)
             area = (
                 alt.Chart(avg)
                 .mark_area(
@@ -686,7 +751,36 @@ def section_chlorophyll() -> None:
                 )
                 .properties(height=360)
             )
-            st.altair_chart(_chart_cfg(area), use_container_width=True)
+            limit_rule = (
+                alt.Chart(pd.DataFrame({"limit": [CHL_ALERT_THRESHOLD]}))
+                .mark_rule(color="#ef4444", strokeWidth=2, strokeDash=[7, 4])
+                .encode(y="limit:Q")
+            )
+            alarm_points = (
+                alt.Chart(avg[avg["chl_alarm"]])
+                .mark_circle(color="#ef4444", size=70)
+                .encode(
+                    x="date:T",
+                    y="display:Q",
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("value:Q", title="Μέση Chl-a", format=".3f"),
+                    ],
+                )
+            )
+            st.altair_chart(_chart_cfg(alt.layer(area, limit_rule, alarm_points)), use_container_width=True)
+            if chl_alarm_rows.empty:
+                st.success("Δεν υπάρχουν alarms χλωροφύλλης πάνω από 24.")
+            else:
+                st.warning(f"Καταγράφηκαν {len(chl_alarm_rows)} alarms χλωροφύλλης (> 24).")
+                st.dataframe(
+                    pd.DataFrame({
+                        "Ημερομηνία": chl_alarm_rows["date"].dt.strftime("%Y-%m-%d"),
+                        "Μέση Chl-a": chl_alarm_rows["value"].round(3),
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
             m1,m2,m3 = st.columns(3)
             m1.metric("Ελάχιστη", f"{avg['value'].min():.3f}")
             m2.metric("Μέγιστη",  f"{avg['value'].max():.3f}")
@@ -756,6 +850,8 @@ def section_turbidity() -> None:
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="turb_smooth")
             avg = avg.copy()
             avg["satellite_display"] = avg["satellite"].rolling(smooth, min_periods=1).mean()
+            avg["turb_alarm"] = avg["satellite"] > TURBIDITY_ALERT_THRESHOLD
+            turb_alarm_rows = _extract_alarm_rows(avg, "satellite", TURBIDITY_ALERT_THRESHOLD)
 
             sat_line = (
                 alt.Chart(avg)
@@ -772,8 +868,25 @@ def section_turbidity() -> None:
             sat_points = alt.Chart(avg).mark_point(color="#22d3ee", size=35, opacity=0.85).encode(
                 x="date:T", y="satellite_display:Q"
             )
+            sat_limit_rule = (
+                alt.Chart(pd.DataFrame({"limit": [TURBIDITY_ALERT_THRESHOLD]}))
+                .mark_rule(color="#ef4444", strokeWidth=2, strokeDash=[7, 4])
+                .encode(y="limit:Q")
+            )
+            sat_alarm_points = (
+                alt.Chart(avg[avg["turb_alarm"]])
+                .mark_circle(color="#ef4444", size=70)
+                .encode(
+                    x="date:T",
+                    y="satellite_display:Q",
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("satellite:Q", title="Μέση NDTI", format=".3f"),
+                    ],
+                )
+            )
 
-            layers = [sat_line, sat_points]
+            layers = [sat_line, sat_points, sat_limit_rule, sat_alarm_points]
             if avg["field"].notna().any():
                 field = avg.dropna(subset=["field"]).copy()
                 field["field_display"] = field["field"].rolling(smooth, min_periods=1).mean()
@@ -800,6 +913,52 @@ def section_turbidity() -> None:
 
             chart = alt.layer(*layers).resolve_scale(y="independent").properties(height=360)
             st.altair_chart(_chart_cfg(chart), use_container_width=True)
+
+            if turb_alarm_rows.empty:
+                st.success("Δεν υπάρχουν alarms θολότητας πάνω από 1.85.")
+            else:
+                st.warning(f"Καταγράφηκαν {len(turb_alarm_rows)} alarms θολότητας (> 1.85).")
+                st.dataframe(
+                    pd.DataFrame({
+                        "Ημερομηνία": turb_alarm_rows["date"].dt.strftime("%Y-%m-%d"),
+                        "Μέση NDTI": turb_alarm_rows["value"].round(3),
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            chl_avg_for_corr = load_chl_avg(str(DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv"))
+            alarm_corr = _build_alarm_correlation(chl_avg_for_corr, avg)
+            st.markdown("#### Συσχέτιση alarms χλωροφύλλης-θολότητας")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Κοινά alarms", f"{alarm_corr['shared_alarm_count']}")
+            c2.metric("Alarm ημέρες Chl-a", f"{alarm_corr['chl_alarm_count']}")
+            c3.metric("Alarm ημέρες NDTI", f"{alarm_corr['turb_alarm_count']}")
+            if np.isnan(alarm_corr["pearson"]):
+                c4.metric("Pearson r", "n/a")
+            else:
+                c4.metric("Pearson r", f"{alarm_corr['pearson']:.3f}")
+
+            overlap_text = []
+            if not np.isnan(alarm_corr["jaccard"]):
+                overlap_text.append(f"Jaccard overlap: {alarm_corr['jaccard']:.1%}")
+            if not np.isnan(alarm_corr["chl_overlap"]):
+                overlap_text.append(f"Κάλυψη alarm Chl-a: {alarm_corr['chl_overlap']:.1%}")
+            if not np.isnan(alarm_corr["turb_overlap"]):
+                overlap_text.append(f"Κάλυψη alarm NDTI: {alarm_corr['turb_overlap']:.1%}")
+            if alarm_corr["paired_points"] > 0:
+                overlap_text.append(f"Κοινές ημερομηνίες για Pearson: {alarm_corr['paired_points']}")
+            if overlap_text:
+                st.caption(" | ".join(overlap_text))
+
+            if alarm_corr["shared_dates"]:
+                st.dataframe(
+                    pd.DataFrame({"Κοινές ημερομηνίες alarm": alarm_corr["shared_dates"]}),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("Δεν βρέθηκαν κοινές ημερομηνίες όπου και οι δύο δείκτες ήταν σε alarm.")
 
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Ελάχιστη (NDTI)", f"{avg['satellite'].min():.3f}")
