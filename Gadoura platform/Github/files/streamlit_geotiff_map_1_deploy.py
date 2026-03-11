@@ -669,7 +669,7 @@ def section_chlorophyll() -> None:
                 )
                 .encode(
                     x=alt.X("date:T", title="Ημερομηνία"),
-                    y=alt.Y("display:Q", title="Μέση Chl-a"),
+                    y=alt.Y("display:Q", title="Μέση Chl-a", scale=alt.Scale(domain=[0, 30], clamp=True)),
                     tooltip=[
                         alt.Tooltip("date:T",    title="Ημερομηνία"),
                         alt.Tooltip("display:Q", title="Chl-a", format=".3f"),
