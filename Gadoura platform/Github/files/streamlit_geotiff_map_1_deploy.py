@@ -1251,6 +1251,8 @@ def main() -> None:
                               options=files, format_func=lambda x: x["name"])
 
     with st.spinner("Φόρτωση εικόνας από Drive…"):
+        if not chosen.get("ready", True):
+            st.info("Πρώτη λήψη GeoTIFF από Drive. Μπορεί να χρειαστεί 30-120 δευτερόλεπτα.")
         img, bounds, center = load_tif(chosen["path"])
 
     if img is None:

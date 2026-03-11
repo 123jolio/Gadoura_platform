@@ -46,6 +46,7 @@ DISABLE_SYNC    = os.getenv("DRIVE_SYNC_DISABLE", "0").strip() == "1"
 
 _EAGER_EXTENSIONS  = {".csv", ".xlsx", ".xls", ".json", ".txt", ".md"}
 _SKIP_EXTENSIONS   = {".py", ".ipynb", ".git"}   # never download these
+_LAZY_ONLY_EXTENSIONS = {".tif", ".tiff"}  # always lazy-download heavy rasters
 
 # Thread-safety for lazy downloads
 
@@ -188,8 +189,10 @@ def _walk_and_sync(
             continue
 
         size = int(item.get("size") or 0)
+        # Keep startup fast: never eager-download GeoTIFF rasters.
         is_eager_candidate = (
-            suffix in _EAGER_EXTENSIONS or size <= EAGER_MAX_BYTES
+            suffix in _EAGER_EXTENSIONS
+            or (suffix not in _LAZY_ONLY_EXTENSIONS and size <= EAGER_MAX_BYTES)
         )
 
         if eager_only and not is_eager_candidate:
