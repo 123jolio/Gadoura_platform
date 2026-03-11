@@ -12,9 +12,11 @@ from pathlib import Path
 from io import BytesIO
 import time
 import importlib
+import importlib.util
 import os
 import json
 import math
+import sys
 from typing import Any, Dict, Optional, Tuple
 
 # ── Dark Plotly theme ─────────────────────────────────────────────────────────
@@ -117,9 +119,28 @@ def render_main_header() -> None:
     )
 
 
-def render_satellite_data_view() -> None:
+def _load_module_from_path(module_name: str, module_path: Path):
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot create module spec for: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_satellite_module(app_variant: str):
+    if app_variant == "mobile":
+        mobile_module_path = APP_DIR / "mobile version" / "streamlit_geotiff_map_1.py"
+        if not mobile_module_path.exists():
+            raise FileNotFoundError(f"Missing mobile module: {mobile_module_path}")
+        return _load_module_from_path("_streamlit_geotiff_map_1_mobile", mobile_module_path)
+    return importlib.import_module("streamlit_geotiff_map_1")
+
+
+def render_satellite_data_view(app_variant: str = "desktop") -> None:
     try:
-        satellite_app = importlib.import_module("streamlit_geotiff_map_1")
+        satellite_app = _load_satellite_module(app_variant)
     except Exception as exc:
         st.error("Αποτυχία φόρτωσης της ενότητας δορυφορικών δεδομένων.")
         st.caption(f"Module import error: {exc}")
@@ -132,6 +153,7 @@ def render_satellite_data_view() -> None:
 
     st.caption(f"Storage root: `{PLATFORM_ROOT}`")
     st.caption(f"Satellite source root: `{SATELLITE_DATA_ROOT}`")
+    st.caption(f"Satellite UI variant: `{app_variant}`")
     try:
         # Render inline in the same Streamlit process (Cloud-safe; no localhost iframe).
         render_fn(show_header=False, show_footer=False, show_debug=False, apply_css=False)
@@ -502,6 +524,29 @@ def render_level_tab() -> None:
 # ─── Top-level header and view selector ───────────────────────────────────────
 render_main_header()
 
+APP_VARIANT_OPTIONS = ["Desktop εφαρμογή", "Mobile εφαρμογή"]
+try:
+    selected_app_variant_label = st.segmented_control(
+        "Έκδοση εφαρμογής",
+        options=APP_VARIANT_OPTIONS,
+        default=APP_VARIANT_OPTIONS[0],
+        selection_mode="single",
+        key="app_variant_selector",
+    )
+except Exception:
+    selected_app_variant_label = st.radio(
+        "Έκδοση εφαρμογής",
+        options=APP_VARIANT_OPTIONS,
+        index=0,
+        horizontal=True,
+        key="app_variant_selector_fallback",
+    )
+
+if not selected_app_variant_label:
+    selected_app_variant_label = APP_VARIANT_OPTIONS[0]
+
+selected_app_variant = "mobile" if selected_app_variant_label.startswith("Mobile") else "desktop"
+
 MAIN_VIEW_OPTIONS = ["Δορυφορικά δεδομένα", "Μετρήσεις πεδίου"]
 try:
     selected_main_view = st.segmented_control(
@@ -524,7 +569,7 @@ if not selected_main_view:
     selected_main_view = MAIN_VIEW_OPTIONS[0]
 
 if selected_main_view == "Δορυφορικά δεδομένα":
-    render_satellite_data_view()
+    render_satellite_data_view(app_variant=selected_app_variant)
     st.stop()
 
 # ─── Load data ─────────────────────────────────────────────────────────────────
