@@ -12,6 +12,8 @@ from datetime import date
 from pathlib import Path
 import re
 import os
+import zipfile
+import xml.etree.ElementTree as ET
 
 import altair as alt
 import folium
@@ -51,13 +53,57 @@ GADOURA_ROOT = SATELLITE_DATA_ROOT if SATELLITE_DATA_ROOT.exists() else PLATFORM
 
 LOGO_URL = "https://chatbot.eyath.gr/_astro/eyath-logo-2.DriaSExn_1jOI34.svg"
 DATE_RE  = re.compile(r"(?P<y>\d{4})_(?P<m>\d{2})_(?P<d>\d{2})")
+PROFILE_LINE_KMZ_NAME = "Γραμμή.kmz"
+TURBIDITY_SCALE_IMAGE_NAME = "output.png"
+
+
+def _resolve_profile_line_kmz() -> Path:
+    candidates = [
+        PLATFORM_ROOT / "field data" / PROFILE_LINE_KMZ_NAME,
+        GADOURA_ROOT.parent / "field data" / PROFILE_LINE_KMZ_NAME,
+        APP_DIR.parent / "field data" / PROFILE_LINE_KMZ_NAME,
+        APP_DIR.parent.parent / "field data" / PROFILE_LINE_KMZ_NAME,
+    ]
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+PROFILE_LINE_KMZ = _resolve_profile_line_kmz()
+
+
+def _resolve_turbidity_scale_image() -> Path:
+    candidates = [
+        SATELLITE_DATA_ROOT / "Θολότητα" / TURBIDITY_SCALE_IMAGE_NAME,
+        PLATFORM_ROOT / "satellite data" / "Θολότητα" / TURBIDITY_SCALE_IMAGE_NAME,
+        GADOURA_ROOT / "Θολότητα" / TURBIDITY_SCALE_IMAGE_NAME,
+        APP_DIR.parent.parent / "satellite data" / "Θολότητα" / TURBIDITY_SCALE_IMAGE_NAME,
+    ]
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+TURBIDITY_SCALE_IMAGE = _resolve_turbidity_scale_image()
 
 
 # ── Case configuration ─────────────────────────────────────────────────────────
 CASE_CONFIG = [
     {
         "key":   "level",
-        "label": "ΣΤΑΘΜΗ",
+        "label": "Στάθμη",
         "icon":  "📈",
         "folders": [],
         "has_chl": False,
@@ -411,6 +457,41 @@ def load_tif(path: str):
     ib   = [[bounds.bottom, bounds.left], [bounds.top, bounds.right]]
     ctr  = [(bounds.bottom + bounds.top) / 2, (bounds.left + bounds.right) / 2]
     return rgb, ib, ctr
+
+
+def _parse_kml_coordinates(coord_text: str) -> list[list[float]]:
+    points: list[list[float]] = []
+    for token in coord_text.replace("\n", " ").replace("\t", " ").split():
+        parts = token.split(",")
+        if len(parts) < 2:
+            continue
+        try:
+            lon = float(parts[0])
+            lat = float(parts[1])
+        except ValueError:
+            continue
+        points.append([lat, lon])
+    return points
+
+
+@st.cache_data(show_spinner=False)
+def load_profile_line_coords(kmz_path: str) -> list[list[float]]:
+    path = Path(kmz_path)
+    if not path.exists():
+        return []
+    try:
+        with zipfile.ZipFile(path) as archive:
+            kml_names = [name for name in archive.namelist() if name.lower().endswith(".kml")]
+            longest: list[list[float]] = []
+            for name in kml_names:
+                root = ET.fromstring(archive.read(name))
+                for node in root.findall(".//{*}LineString/{*}coordinates"):
+                    coords = _parse_kml_coordinates(node.text or "")
+                    if len(coords) > len(longest):
+                        longest = coords
+            return longest
+    except Exception:
+        return []
 
 
 @st.cache_data(show_spinner=False)
@@ -931,11 +1012,26 @@ def main() -> None:
         image=img, bounds=bounds, opacity=opacity,
         name=full_label, interactive=True, zindex=1,
     ).add_to(fmap)
+    if cfg.get("has_chl") or cfg.get("has_turbidity", False):
+        profile_line = load_profile_line_coords(str(PROFILE_LINE_KMZ))
+        if len(profile_line) >= 2:
+            folium.PolyLine(
+                locations=profile_line,
+                color="#f59e0b",
+                weight=4,
+                opacity=0.95,
+                tooltip="Γραμμή δειγματοληψίας",
+                name="Γραμμή δειγματοληψίας",
+            ).add_to(fmap)
     folium.LayerControl(position="bottomright").add_to(fmap)
 
     st.markdown("<div class='mapwrap'>", unsafe_allow_html=True)
     st_folium(fmap, width=None, height=680, returned_objects=[])
     st.markdown("</div>", unsafe_allow_html=True)
+
+    if cfg.get("has_turbidity", False) and TURBIDITY_SCALE_IMAGE.exists():
+        st.markdown("<div class='slabel'>Κλίμακα Θολότητας</div>", unsafe_allow_html=True)
+        st.image(str(TURBIDITY_SCALE_IMAGE), caption="Κλίμακα τιμών θολότητας", use_container_width=True)
 
     # ── Chlorophyll charts (only for that case, hidden by default) ───────────
     if cfg["has_chl"]:
