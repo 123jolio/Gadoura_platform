@@ -727,10 +727,15 @@ def section_chlorophyll() -> None:
                 )
                 .properties(height=360)
             )
+            danger_zone = (
+                alt.Chart(pd.DataFrame({"ymin": [CHL_ALERT_THRESHOLD], "ymax": [30.0]}))
+                .mark_rect(color="#ef4444", opacity=0.16)
+                .encode(y="ymin:Q", y2="ymax:Q")
+            )
             limit_rule = (
-                alt.Chart(pd.DataFrame({"limit": [CHL_ALERT_THRESHOLD]}))
-                .mark_rule(color="#ef4444", strokeWidth=2, strokeDash=[7, 4])
-                .encode(y="limit:Q")
+                alt.Chart(avg)
+                .mark_rule(color="#ef4444", strokeWidth=3, strokeDash=[8, 5], opacity=0.95)
+                .encode(y=alt.datum(CHL_ALERT_THRESHOLD))
             )
             alarm_points = (
                 alt.Chart(avg[avg["chl_alarm"]])
@@ -744,7 +749,7 @@ def section_chlorophyll() -> None:
                     ],
                 )
             )
-            st.altair_chart(_chart_cfg(alt.layer(area, limit_rule, alarm_points)), use_container_width=True)
+            st.altair_chart(_chart_cfg(alt.layer(area, danger_zone, limit_rule, alarm_points)), use_container_width=True)
             if chl_alarm_rows.empty:
                 st.success("Δεν υπάρχουν alarms χλωροφύλλης πάνω από 24.")
             else:
@@ -845,9 +850,9 @@ def section_turbidity() -> None:
                 x="date:T", y="satellite_display:Q"
             )
             sat_limit_rule = (
-                alt.Chart(pd.DataFrame({"limit": [TURBIDITY_ALERT_THRESHOLD]}))
-                .mark_rule(color="#ef4444", strokeWidth=2, strokeDash=[7, 4])
-                .encode(y="limit:Q")
+                alt.Chart(avg)
+                .mark_rule(color="#ef4444", strokeWidth=3, strokeDash=[8, 5], opacity=0.95)
+                .encode(y=alt.datum(TURBIDITY_ALERT_THRESHOLD))
             )
             sat_alarm_points = (
                 alt.Chart(avg[avg["turb_alarm"]])
