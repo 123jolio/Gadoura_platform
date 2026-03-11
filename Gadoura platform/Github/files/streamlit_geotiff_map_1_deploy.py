@@ -604,12 +604,20 @@ def _chart_cfg(c):
 # ══════════════════════════════════════════════════════════════════════════════
 #  UI SECTIONS
 # ══════════════════════════════════════════════════════════════════════════════
+def render_profile_line_toggle_button() -> None:
+    show_line = st.session_state.get("show_profile_line_on_map", False)
+    label = "Απόκρυψη γραμμής" if show_line else "Εμφάνιση γραμμής"
+    if st.button(label, key="btn_profile_line_toggle", use_container_width=False):
+        st.session_state["show_profile_line_on_map"] = not show_line
+        st.rerun()
+
 def section_chlorophyll() -> None:
     points_csv = DATA_ROOT / "VALIDATED_CHLOROPHYL.csv"
     avg_csv    = DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv"
 
     st.markdown("<div class='slabel'>📊 Διαγράμματα Επικυρωμένης Χλωροφύλλης</div>",
                 unsafe_allow_html=True)
+    render_profile_line_toggle_button()
     tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
 
     with tab_pts:
@@ -690,6 +698,7 @@ def section_turbidity() -> None:
     avg_csv = charts_root / "average turbidity.csv"
 
     st.markdown("<div class='slabel'>📉 Διαγράμματα Θολότητας</div>", unsafe_allow_html=True)
+    render_profile_line_toggle_button()
     tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
 
     with tab_pts:
@@ -1012,7 +1021,9 @@ def main() -> None:
         image=img, bounds=bounds, opacity=opacity,
         name=full_label, interactive=True, zindex=1,
     ).add_to(fmap)
-    if cfg.get("has_chl") or cfg.get("has_turbidity", False):
+    if st.session_state.get("show_profile_line_on_map", False) and (
+        cfg.get("has_chl") or cfg.get("has_turbidity", False)
+    ):
         profile_line = load_profile_line_coords(str(PROFILE_LINE_KMZ))
         if len(profile_line) >= 2:
             folium.PolyLine(
@@ -1064,4 +1075,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
