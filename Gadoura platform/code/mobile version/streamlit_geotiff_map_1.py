@@ -147,9 +147,18 @@ CASE_CONFIG = [
         "has_chl": True,
     },
     {
-        "key":   "cya",
+        "key":   "uncalibrated_satellite",
         "label": "ΜΗ ΒΑΘΜΟΝΟΜΗΜΕΝΕΣ ΔΟΡΥΦΟΡΙΚΕΣ ΕΙΚΟΝΕΣ",
         "label_full": "Μη βαθμονομημένες δορυφορικές εικόνες",
+        "icon":  "🧫",
+        "folders": [],
+        "has_chl": False,
+        "children": ["cya"],
+    },
+    {
+        "key":   "cya",
+        "label": "CYA",
+        "label_full": "Cya (Se2WaQ)",
         "icon":  "🧫",
         "folders": [GADOURA_ROOT / "Cya" / "GeoTIFFs"],
         "has_chl": False,
@@ -174,11 +183,16 @@ CASE_CONFIG = [
     },
 ]
 CASE_BY_KEY = {c["key"]: c for c in CASE_CONFIG}
+CASE_GROUP_PARENT_BY_CHILD = {
+    child: cfg["key"]
+    for cfg in CASE_CONFIG
+    for child in cfg.get("children", [])
+}
 CASE_DISPLAY_ORDER = [
     "level",
     "pragmatiki",
     "chlorophyll_validated",
-    "cya",
+    "uncalibrated_satellite",
     "tholotita",
     "burned_areas",
     "bgr",
@@ -1114,6 +1128,8 @@ def render_satellite_dashboard(
 
     if "case_key" not in st.session_state:
         st.session_state["case_key"] = "chlorophyll_validated"
+    elif st.session_state["case_key"] in CASE_GROUP_PARENT_BY_CHILD:
+        st.session_state["case_key"] = CASE_GROUP_PARENT_BY_CHILD[st.session_state["case_key"]]
 
     case_buttons = [CASE_BY_KEY[k] for k in CASE_DISPLAY_ORDER if k in CASE_BY_KEY]
     cols = st.columns(len(case_buttons))
@@ -1129,9 +1145,40 @@ def render_satellite_dashboard(
                 st.session_state["case_key"] = cfg["key"]
                 st.rerun()
 
-    key = st.session_state["case_key"]
-    cfg = CASE_BY_KEY[key]
+    top_key = st.session_state["case_key"]
+    top_cfg = CASE_BY_KEY[top_key]
+    active_key = top_key
+    if top_cfg.get("children"):
+        child_keys = [child for child in top_cfg["children"] if child in CASE_BY_KEY]
+        if not child_keys:
+            st.warning("Δεν υπάρχουν διαθέσιμες υποκατηγορίες για αυτή την ενότητα.")
+            return
+
+        st.markdown("<div class='slabel'>Υποκατηγορία</div>", unsafe_allow_html=True)
+        subcase_state_key = f"subcase::{top_key}"
+        if st.session_state.get(subcase_state_key) not in child_keys:
+            st.session_state[subcase_state_key] = child_keys[0]
+
+        subcols = st.columns(len(child_keys))
+        for col, child_key in zip(subcols, child_keys):
+            child_cfg = CASE_BY_KEY[child_key]
+            child_active = st.session_state[subcase_state_key] == child_key
+            with col:
+                if st.button(
+                    child_cfg["label"],
+                    key=f"subbtn_{top_key}_{child_key}",
+                    use_container_width=True,
+                    type="primary" if child_active else "secondary",
+                ):
+                    st.session_state[subcase_state_key] = child_key
+                    st.rerun()
+
+        active_key = st.session_state[subcase_state_key]
+
+    cfg = CASE_BY_KEY[active_key]
     full_label = cfg.get("label_full", cfg["label"])
+    if active_key != top_key:
+        full_label = f"{top_cfg.get('label_full', top_cfg['label'])} · {full_label}"
 
     st.markdown(
         f"<div class='sstrip'><div class='sdot'></div>"
@@ -1144,7 +1191,7 @@ def render_satellite_dashboard(
         return
 
     # ── Resolve folder ───────────────────────────────────────────────────────
-    folder = resolve_folder(key)
+    folder = resolve_folder(active_key)
     if folder is None:
         st.error(f"⚠️ Δεν βρέθηκε φάκελος GeoTIFF για **{full_label}**. "
                  f"Ελέγξτε: `{GADOURA_ROOT}`")
@@ -1162,7 +1209,7 @@ def render_satellite_dashboard(
         grouped.setdefault(r["date"], []).append(r)
     avail = sorted(grouped.keys())
 
-    dk = f"date::{key}"
+    dk = f"date::{active_key}"
     cur = nearest(st.session_state.get(dk, avail[0]), avail)
 
     # ── Date / opacity controls ──────────────────────────────────────────────
