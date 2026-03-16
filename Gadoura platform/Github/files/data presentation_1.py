@@ -2710,7 +2710,7 @@ with tab_depth:
                     st.info("Δεν υπάρχουν δεδομένα για αυτή τη συνδυαστική επιλογή.")
                     continue
                 
-                n_cols = min(2, len(profile_params))
+                n_cols = max(1, len(profile_params))
                 cols = st.columns(n_cols)
                 
                 for i, param in enumerate(profile_params):
@@ -2746,26 +2746,42 @@ with tab_depth:
                     fig_p.update_layout(
                         xaxis=dict(side="bottom"),
                         yaxis=dict(title="Βάθος (m)", autorange="reversed"),
-                        height=440,
+                        height=380,
                         plot_bgcolor="#ffffff",
                         paper_bgcolor="#ffffff",
                         font=dict(color="#334155", family="Plus Jakarta Sans, sans-serif"),
                         legend=dict(
-                            orientation="h",
+                            orientation="v",
                             yanchor="bottom",
-                            y=1.01,
-                            xanchor="left",
-                            x=0,
+                            y=0.03,
+                            xanchor="right",
+                            x=0.98,
                             font=dict(size=10, color="#64748b"),
-                            bgcolor="rgba(255,255,255,0)",
-                            borderwidth=0
+                            bgcolor="rgba(255,255,255,0.82)",
+                            bordercolor="#e2e8f0",
+                            borderwidth=1
                         ),
                         hoverlabel=dict(
                             bgcolor="#ffffff",
                             font_color="#0f172a",
                             bordercolor="#cbd5e1"
                         ),
-                        margin=dict(t=22, b=40, l=58, r=18)
+                        margin=dict(t=16, b=36, l=52, r=12)
+                    )
+                    fig_p.add_annotation(
+                        text=f"<b>{param}</b>",
+                        xref="paper",
+                        yref="paper",
+                        x=0.03,
+                        y=0.98,
+                        xanchor="left",
+                        yanchor="top",
+                        showarrow=False,
+                        font=dict(size=14, color="#0f172a", family="Plus Jakarta Sans, sans-serif"),
+                        bgcolor="rgba(255,255,255,0.88)",
+                        bordercolor="#e2e8f0",
+                        borderwidth=1,
+                        borderpad=4,
                     )
                     fig_p.update_xaxes(
                         title_text=None,
@@ -2786,10 +2802,6 @@ with tab_depth:
                         automargin=True
                     )
                     with cols[i % n_cols]:
-                        st.markdown(
-                            f"<div style='margin:0 0 .4rem .15rem;font-family:Plus Jakarta Sans, sans-serif;font-size:1rem;font-weight:700;color:#e6f0fb;'>{param}</div>",
-                            unsafe_allow_html=True,
-                        )
                         st.plotly_chart(
                             fig_p,
                             use_container_width=True,
