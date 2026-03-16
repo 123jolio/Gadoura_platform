@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import base64
 import pandas as pd
 import numpy as np
@@ -13,9 +13,11 @@ from pathlib import Path
 from io import BytesIO
 import time
 import importlib
+import importlib.util
 import os
 import json
 import math
+import sys
 import streamlit.components.v1 as components
 from typing import Any, Dict, Optional, Tuple
 
@@ -179,9 +181,28 @@ def render_main_header() -> None:
     )
 
 
-def render_satellite_data_view() -> None:
+def _load_module_from_path(module_name: str, module_path: Path):
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot create module spec for: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_satellite_module(app_variant: str):
+    if app_variant == "mobile":
+        mobile_module_path = APP_DIR / "mobile version" / "streamlit_geotiff_map_1.py"
+        if not mobile_module_path.exists():
+            raise FileNotFoundError(f"Missing mobile module: {mobile_module_path}")
+        return _load_module_from_path("_streamlit_geotiff_map_1_mobile", mobile_module_path)
+    return importlib.import_module("streamlit_geotiff_map_1")
+
+
+def render_satellite_data_view(app_variant: str = "desktop") -> None:
     try:
-        satellite_app = importlib.import_module("streamlit_geotiff_map_1")
+        satellite_app = _load_satellite_module(app_variant)
     except Exception as exc:
         st.error("Αποτυχία φόρτωσης της ενότητας δορυφορικών δεδομένων.")
         st.caption(f"Module import error: {exc}")
@@ -194,6 +215,7 @@ def render_satellite_data_view() -> None:
 
     st.caption(f"Storage root: `{PLATFORM_ROOT}`")
     st.caption(f"Satellite source root: `{SATELLITE_DATA_ROOT}`")
+    st.caption(f"Satellite UI variant: `{app_variant}`")
     try:
         # Render inline in the same Streamlit process (Cloud-safe; no localhost iframe).
         render_fn(show_header=False, show_footer=False, show_debug=False, apply_css=False)
@@ -212,7 +234,7 @@ def _read_binary_file(path: str) -> bytes:
     return Path(path).read_bytes()
 
 
-def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 920) -> None:
+def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 1120) -> None:
     pdf_b64 = base64.b64encode(file_bytes).decode("ascii")
     safe_name = json.dumps(file_name, ensure_ascii=False)
     viewer_html = f"""
@@ -244,11 +266,12 @@ def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 920)
       #pdf-toolbar {{
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
         padding: 10px 12px;
         border-bottom: 1px solid #dbe4ee;
         background: #f8fafc;
-        flex-wrap: wrap;
+        position: sticky;
+        top: 0;
       }}
       #pdf-toolbar button,
       #pdf-toolbar a {{
@@ -266,15 +289,15 @@ def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 920)
         cursor: not-allowed;
       }}
       #pdf-status {{
-        flex: 1 1 100%;
+        flex: 1;
         text-align: center;
         font-size: 13px;
         color: #334155;
       }}
       #pdf-viewer {{
-        padding: 12px;
+        padding: 14px;
         background: #e5e7eb;
-        min-height: {max(height - 92, 300)}px;
+        min-height: {max(height - 70, 320)}px;
         overflow: auto;
         text-align: center;
       }}
@@ -333,8 +356,8 @@ def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 920)
         rendering = true;
         pdfDoc.getPage(num).then((page) => {{
           const baseViewport = page.getViewport({{ scale: 1 }});
-          const availableWidth = Math.max(viewerEl.clientWidth - 24, 280);
-          const availableHeight = Math.max(viewerEl.clientHeight - 24, 280);
+          const availableWidth = Math.max(viewerEl.clientWidth - 32, 320);
+          const availableHeight = Math.max(viewerEl.clientHeight - 28, 320);
           const widthScale = availableWidth / baseViewport.width;
           const heightScale = availableHeight / baseViewport.height;
           const scale = Math.max(0.2, Math.min(widthScale, heightScale));
@@ -490,18 +513,18 @@ def _depth_profiles_chart_board_png(
     n_rows = max(1, len(dates_sorted))
     n_cols = max(1, len(profile_params))
 
-    fig_width = max(8.0, 4.2 * n_cols)
-    fig_height = max(4.4, 3.8 * n_rows)
+    fig_width = max(8.5, 4.5 * n_cols)
+    fig_height = max(4.8, 4.0 * n_rows)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height), dpi=220, squeeze=False)
     fig.patch.set_facecolor("#ffffff")
-    plt.subplots_adjust(left=0.09, right=0.985, top=0.95, bottom=0.08, wspace=0.18, hspace=0.62)
+    plt.subplots_adjust(left=0.08, right=0.985, top=0.95, bottom=0.08, wspace=0.18, hspace=0.62)
     fig.suptitle(
         "Κατακόρυφα Προφίλ",
         x=0.02,
         y=0.985,
         ha="left",
         va="top",
-        fontsize=17,
+        fontsize=18,
         fontweight="bold",
         color="#0f172a",
         fontfamily="DejaVu Sans",
@@ -514,40 +537,25 @@ def _depth_profiles_chart_board_png(
             ax = axes[row_idx, col_idx]
             ax.set_facecolor("#ffffff")
             ax.grid(True, color="#dbe4ee", linewidth=0.7, alpha=0.95)
-            ax.tick_params(colors="#334155", labelsize=7.5)
+            ax.tick_params(colors="#334155", labelsize=8)
             for spine in ax.spines.values():
                 spine.set_color("#cbd5e1")
 
-            if col_idx == 0:
-                ax.text(
-                    -0.02,
-                    1.16,
-                    f"Ημερομηνία: {date_str}",
-                    transform=ax.transAxes,
-                    fontsize=10.5,
-                    fontweight="bold",
-                    color="#0f172a",
-                    ha="left",
-                    va="center",
-                    clip_on=False,
-                    fontfamily="DejaVu Sans",
-                )
-
             ax.set_title(
                 f"Ημερομηνία: {date_str}\n{param}",
-                fontsize=9.0,
+                fontsize=9.4,
                 color="#0f172a",
                 pad=7,
                 fontfamily="DejaVu Sans",
             )
             ax.set_xlabel(
                 f"Χ άξονας: {param}",
-                fontsize=8.2,
+                fontsize=8.6,
                 color="#0f172a",
                 labelpad=4,
                 fontfamily="DejaVu Sans",
             )
-            ax.set_ylabel("Βάθος (m)" if col_idx == 0 else "", fontsize=8.5, color="#0f172a", fontfamily="DejaVu Sans")
+            ax.set_ylabel("Βάθος (m)" if col_idx == 0 else "", fontsize=9, color="#0f172a", fontfamily="DejaVu Sans")
 
             if depth_axis_range and len(depth_axis_range) == 2:
                 ax.set_ylim(depth_axis_range[0], depth_axis_range[1])
@@ -566,8 +574,8 @@ def _depth_profiles_chart_board_png(
                         pd.to_numeric(psub[param], errors="coerce"),
                         psub["depth_m"],
                         marker="o",
-                        markersize=3.4,
-                        linewidth=1.55,
+                        markersize=3.8,
+                        linewidth=1.7,
                         color=color,
                         label=f"Σ{int(pt)}",
                     )
@@ -579,8 +587,8 @@ def _depth_profiles_chart_board_png(
                         pd.to_numeric(psub[param], errors="coerce"),
                         psub["depth_m"],
                         marker="o",
-                        markersize=3.8,
-                        linewidth=1.7,
+                        markersize=4.2,
+                        linewidth=1.9,
                         color="#2e86c1",
                         label=f"Σ{selected_point}",
                     )
@@ -589,7 +597,7 @@ def _depth_profiles_chart_board_png(
             if plotted:
                 leg = ax.legend(
                     loc="lower right",
-                    fontsize=6.0,
+                    fontsize=6.4,
                     frameon=True,
                     facecolor="#ffffff",
                     edgecolor="#e2e8f0",
@@ -605,7 +613,7 @@ def _depth_profiles_chart_board_png(
                     transform=ax.transAxes,
                     ha="center",
                     va="center",
-                    fontsize=9.5,
+                    fontsize=10,
                     color="#64748b",
                     fontfamily="DejaVu Sans",
                 )
@@ -952,7 +960,7 @@ def render_level_tab() -> None:
     val_lbl = lvl["col"].iloc[0] if "col" in lvl.columns else "Στάθμη (m)"
     dfp = lvl[["date", "value"]].copy()
 
-    c1, c2, c3 = (st.columns(1) + st.columns(2)) if _is_mobile else st.columns([2, 1, 1])
+    c1, c2, c3 = st.columns([2, 1, 1])
     with c1:
         drng = st.date_input(
             "Εύρος ημερομηνιών",
@@ -978,7 +986,7 @@ def render_level_tab() -> None:
 
     dfp["display"] = dfp["value"].rolling(smooth, min_periods=1).mean()
 
-    m1, m2, m3, m4 = (st.columns(2) + st.columns(2)) if _is_mobile else st.columns(4)
+    m1, m2, m3, m4 = st.columns(4)
     m1.metric("Τελευταία", f"{dfp['value'].iloc[-1]:.2f} m")
     m2.metric("Μέγιστη", f"{dfp['value'].max():.2f} m")
     m3.metric("Ελάχιστη", f"{dfp['value'].min():.2f} m")
@@ -1028,6 +1036,29 @@ def render_level_tab() -> None:
 # ─── Top-level header and view selector ───────────────────────────────────────
 render_main_header()
 
+APP_VARIANT_OPTIONS = ["Desktop εφαρμογή", "Mobile εφαρμογή"]
+try:
+    selected_app_variant_label = st.segmented_control(
+        "Έκδοση εφαρμογής",
+        options=APP_VARIANT_OPTIONS,
+        default=APP_VARIANT_OPTIONS[0],
+        selection_mode="single",
+        key="app_variant_selector",
+    )
+except Exception:
+    selected_app_variant_label = st.radio(
+        "Έκδοση εφαρμογής",
+        options=APP_VARIANT_OPTIONS,
+        index=0,
+        horizontal=True,
+        key="app_variant_selector_fallback",
+    )
+
+if not selected_app_variant_label:
+    selected_app_variant_label = APP_VARIANT_OPTIONS[0]
+
+selected_app_variant = "mobile" if selected_app_variant_label.startswith("Mobile") else "desktop"
+
 MAIN_VIEW_OPTIONS = ["Δορυφορικά δεδομένα", "Μετρήσεις πεδίου", "Παραδοτέα Έργου"]
 try:
     selected_main_view = st.segmented_control(
@@ -1050,17 +1081,17 @@ if not selected_main_view:
     selected_main_view = MAIN_VIEW_OPTIONS[0]
 
 if selected_main_view == "Δορυφορικά δεδομένα":
-    render_satellite_data_view()
+    render_satellite_data_view(app_variant=selected_app_variant)
     st.stop()
 
 if selected_main_view == "Παραδοτέα Έργου":
     render_deliverables_view()
     st.stop()
 
+_use_light_plot_theme()
+
 # ─── Load data ─────────────────────────────────────────────────────────────────
 EXCEL_PATH = "ΑΠΟΤΕΛΕΣΜΑΤΑ_ΔΟΡΥΦΟΡΙΚΗΣ_ΠΑΡΑΚΟΛΟΥΘΗΣΗΣ_ΦΡΑΓΜΑΤΟΣ_2025-2026_ΕΥΑΘ.xlsx"
-
-_use_light_plot_theme()
 
 def _simplify_name(name):
     return re.sub(r"[\s_.-]+", "", name).lower()
@@ -1152,13 +1183,12 @@ if df.empty or "date" not in df.columns:
     st.caption("Check the worksheet structure and point/depth rows, then rerun.")
     st.stop()
 
-st.caption(f"Πηγή δεδομένων μετρήσεων πεδίου (Excel): `{MEASUREMENTS_SOURCE_PATH}`")
+st.caption(f"Πηγή δεδομένων μετρήσεων πεδίου (Excel): `{Path(MEASUREMENTS_SOURCE_PATH).name}`")
 
 # ─── CSS ───────────────────────────────────────────────────────────────────────
 # ── Dark theme CSS (matches streamlit_geotiff_map_1.py) ──────────────────────
 CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <style>
 :root{
   --bg:#060d18;--bg2:#0a1525;--sf:#0e1e30;--sf2:#122236;
@@ -1227,178 +1257,21 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 ::-webkit-scrollbar-thumb{background:#1a3d58;border-radius:3px;}
 ::-webkit-scrollbar-thumb:hover{background:#2a5472;}
 hr{border-color:var(--bdr)!important;}
-
-/* ═══════════════════════════════════════════════════════════════
-   MOBILE RESPONSIVE — screens < 768px
-   ═══════════════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
-
-  /* ── Layout ──────────────────────────────────────────────── */
-  .block-container {
-    padding-top: .8rem !important;
-    padding-left: .75rem !important;
-    padding-right: .75rem !important;
-    padding-bottom: 5rem !important;
-  }
-
-  /* ── Header: stack logo above text on small screens ──────── */
-  .hcard {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 1rem !important;
-    padding: 1.2rem 1.4rem !important;
-    border-radius: 14px !important;
-    margin-bottom: 1.2rem !important;
-  }
-  .hcard-logos {
-    width: auto !important;
-    display: flex !important;
-    align-items: flex-start !important;
-    gap: .75rem !important;
-    flex-wrap: nowrap !important;
-  }
-  .hcard-logo-primary { width: 180px !important; max-height: 44px !important; }
-  .hcard-logo-secondary { width: 120px !important; max-height: 80px !important; }
-  .hcard h1  { font-size: 1.1rem !important; }
-  .hcard .sub{ font-size: .65rem !important; }
-
-  /* ── Streamlit columns → stack vertically ────────────────── */
-  [data-testid="stHorizontalBlock"] {
-    flex-direction: column !important;
-    gap: .75rem !important;
-  }
-  [data-testid="stColumn"] {
-    width: 100% !important;
-    min-width: 100% !important;
-    flex: 1 1 100% !important;
-  }
-
-  /* ── Metric cards ─────────────────────────────────────────── */
-  .metric-card {
-    padding: .9rem 1rem !important;
-    border-radius: 12px !important;
-  }
-  .metric-val { font-size: 1.5rem !important; }
-  .metric-label { font-size: .58rem !important; }
-
-  /* ── Buttons — bigger touch targets ──────────────────────── */
-  [data-testid="stButton"] > button {
-    min-height: 48px !important;
-    font-size: .78rem !important;
-    padding: .8rem 1rem !important;
-    border-radius: 10px !important;
-    width: 100% !important;
-  }
-
-  /* ── Tabs — scrollable on mobile ─────────────────────────── */
-  [data-testid="stTabs"] [role="tablist"] {
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important;
-    padding-bottom: 2px !important;
-  }
-  [data-testid="stTabs"] [role="tablist"]::-webkit-scrollbar { display:none; }
-  [data-testid="stTabs"] [role="tab"] {
-    white-space: nowrap !important;
-    font-size: .65rem !important;
-    padding: .45rem .85rem !important;
-    min-width: fit-content !important;
-  }
-
-  /* ── Select boxes & inputs ────────────────────────────────── */
-  [data-testid="stSelectbox"] [data-baseweb="select"] > div,
-  [data-testid="stDateInput"] input {
-    font-size: .85rem !important;
-    min-height: 44px !important;
-  }
-
-  /* ── Map — full width, reasonable height ──────────────────── */
-  .mapwrap { border-radius: 12px !important; }
-  [data-testid="stIFrame"] { min-height: 340px !important; }
-  iframe { min-height: 340px !important; }
-
-  /* ── Status strip ─────────────────────────────────────────── */
-  .sstrip {
-    font-size: .72rem !important;
-    padding: .4rem .75rem !important;
-  }
-
-  /* ── Section labels ───────────────────────────────────────── */
-  .slabel { font-size: .58rem !important; letter-spacing: .16em !important; }
-
-  /* ── Sidebar: auto-hides on mobile in Streamlit ──────────── */
-  [data-testid="stSidebar"] > div:first-child {
-    padding-top: 1rem !important;
-  }
-
-  /* ── Plotly charts ────────────────────────────────────────── */
-  [data-testid="stPlotlyChart"] { overflow-x: auto !important; }
-  [data-testid="stPlotlyChart"] > div { min-width: 0 !important; }
-
-  /* ── Caption/mono text ────────────────────────────────────── */
-  [data-testid="stCaptionContainer"] { font-size: .62rem !important; }
-
-  /* ── pydeck/folium map containers ────────────────────────── */
-  [data-testid="stDeckGlJsonChart"],
-  .stFolium { border-radius: 12px !important; overflow: hidden !important; }
-
-  /* ── Expander ─────────────────────────────────────────────── */
-  [data-testid="stExpander"] summary {
-    font-size: .75rem !important;
-    padding: .8rem !important;
-  }
-}
-
-/* ── Extra-small phones (< 420px) ──────────────────────────────── */
-@media (max-width: 420px) {
-  .hcard h1  { font-size: .95rem !important; }
-  .metric-val { font-size: 1.35rem !important; }
-  [data-testid="stTabs"] [role="tab"] {
-    font-size: .6rem !important;
-    padding: .4rem .7rem !important;
-  }
-}
 </style>
 """
-st.markdown(CSS, unsafe_allow_html=True)
-
-# ── Mobile detection via JS ────────────────────────────────────────────────────
-_MOBILE_JS = """
-<script>
-(function() {
-    const w = window.innerWidth;
-    const mobile = w < 768;
-    // Send to Streamlit via URL param trick — use sessionStorage flag
-    if (mobile !== (sessionStorage.getItem('_st_mobile') === '1')) {
-        sessionStorage.setItem('_st_mobile', mobile ? '1' : '0');
-        // Set a cookie Streamlit can read via query params on reload
-        const url = new URL(window.location.href);
-        url.searchParams.set('_mobile', mobile ? '1' : '0');
-        window.location.replace(url.toString());
-    }
-})();
-</script>
-"""
-st.markdown(_MOBILE_JS, unsafe_allow_html=True)
-
-# Read mobile flag from query params (set by JS above)
-_qp = st.query_params
-_is_mobile = str(_qp.get("_mobile", "0")) == "1"
-
-def _cols(*desktop_spec):
-    """Return st.columns with mobile-aware spec.
-    On mobile, always returns a single column."""
-    if _is_mobile:
-        return st.columns(1)
-    return st.columns(list(desktop_spec) if len(desktop_spec) > 1 else desktop_spec[0])
-
-
+try:
+    if hasattr(st, "html"):
+        # On newer Streamlit versions this avoids occasional raw CSS text rendering.
+        st.html(CSS)  # type: ignore[attr-defined]
+    else:
+        st.markdown(CSS, unsafe_allow_html=True)
+except Exception:
+    st.markdown(CSS, unsafe_allow_html=True)
 
 st.markdown("---")
 
 # ─── Summary metrics ───────────────────────────────────────────────────────────
-col1, col2, col3, col4 = (st.columns(2) + st.columns(2)) if _is_mobile else st.columns(4)
+col1, col2, col3, col4 = st.columns(4)
 dates = sorted(df["date"].unique())
 with col1:
     st.markdown(f"""<div class="metric-card"><div style="font-size:1.3rem;margin-bottom:.3rem">📅</div><div class="metric-val">{len(dates)}</div><div class="metric-label">Δειγματοληψίες</div></div>""", unsafe_allow_html=True)
@@ -1781,282 +1654,6 @@ with st.sidebar:
     st.markdown("**Legend**")
     st.dataframe(legend_view, use_container_width=True, hide_index=True, height=220)
     st.caption("Ο χάρτης παραμένει ορατός σε όλα τα διαγράμματα.")
-
-# ══════════════════════════════════════════════════════════════
-# REPORT / SCIENTIFIC INTERPRETATION HELPERS
-# ══════════════════════════════════════════════════════════════
-def _format_date_gr(x):
-    try:
-        return pd.to_datetime(x).strftime("%d.%m.%Y")
-    except Exception:
-        return ""
-
-
-def _safe_num(v):
-    try:
-        if pd.isna(v):
-            return np.nan
-        return float(v)
-    except Exception:
-        return np.nan
-
-
-def _value_at_depth(sub, param, depth_target, tol=0.6):
-    if param not in sub.columns:
-        return np.nan
-    tmp = sub.copy()
-    tmp[param] = pd.to_numeric(tmp[param], errors="coerce")
-    tmp = tmp.dropna(subset=["depth_m", param])
-    if tmp.empty:
-        return np.nan
-    s = tmp[np.abs(tmp["depth_m"] - depth_target) <= tol][param].dropna()
-    return float(s.mean()) if not s.empty else np.nan
-
-
-def _surface_value(sub, param):
-    if param not in sub.columns:
-        return np.nan
-    tmp = sub.copy()
-    tmp[param] = pd.to_numeric(tmp[param], errors="coerce")
-    tmp = tmp.dropna(subset=[param])
-    s = tmp[tmp["depth_m"] <= 1.0][param].dropna()
-    return float(s.mean()) if not s.empty else np.nan
-
-
-def _deepest_value(sub, param):
-    if param not in sub.columns:
-        return np.nan
-    tmp = sub[["depth_m", param]].copy()
-    tmp[param] = pd.to_numeric(tmp[param], errors="coerce")
-    tmp = tmp.dropna(subset=["depth_m", param]).sort_values("depth_m")
-    if tmp.empty:
-        return np.nan
-    return float(tmp.iloc[-1][param])
-
-
-def _deepest_depth(sub):
-    s = pd.to_numeric(sub["depth_m"], errors="coerce").dropna()
-    return float(s.max()) if not s.empty else np.nan
-
-
-def _prepare_report_source(df_in):
-    src = df_in.copy()
-    src["depth_m"] = src["depth"].apply(depth_to_m)
-    src = src.dropna(subset=["date", "point", "depth_m"])
-    return src
-
-
-def _build_stratification_summary(df_in):
-    src = _prepare_report_source(df_in)
-    rows = []
-
-    for d in sorted(src["date"].dropna().unique()):
-        sub = src[src["date"] == d].copy()
-
-        t1 = _value_at_depth(sub, "Θερμοκρασία (°C)", 1)
-        t10 = _value_at_depth(sub, "Θερμοκρασία (°C)", 10)
-        t15 = _value_at_depth(sub, "Θερμοκρασία (°C)", 15)
-        t20 = _value_at_depth(sub, "Θερμοκρασία (°C)", 20)
-        tdeep = _deepest_value(sub, "Θερμοκρασία (°C)")
-        dt = t1 - tdeep if pd.notna(t1) and pd.notna(tdeep) else np.nan
-
-        if pd.isna(dt):
-            state = ""
-        elif dt >= 10:
-            state = "Έντονη στρωμάτωση"
-        elif dt >= 4:
-            state = "Σταδιακή ψύξη"
-        elif dt >= 1:
-            state = "Αρχή κυκλοφορίας"
-        else:
-            state = "Ανακυκλοφορία / Ισόθερμος"
-
-        rows.append({
-            "Ημερομηνία": _format_date_gr(d),
-            "T @ 1m (°C)": round(t1, 1) if pd.notna(t1) else np.nan,
-            "T @ 10m (°C)": round(t10, 1) if pd.notna(t10) else np.nan,
-            "T @ 15m (°C)": round(t15, 1) if pd.notna(t15) else np.nan,
-            "T @ 20m (°C)": round(t20, 1) if pd.notna(t20) else np.nan,
-            "ΔT (°C)": round(dt, 1) if pd.notna(dt) else np.nan,
-            "Κατάσταση": state,
-        })
-    return pd.DataFrame(rows)
-
-
-def _build_do_summary(df_in):
-    src = _prepare_report_source(df_in)
-    rows = []
-
-    for d in sorted(src["date"].dropna().unique()):
-        sub = src[src["date"] == d].copy()
-
-        do1 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 1)
-        do10 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 10)
-        do15 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 15)
-        do20 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 20)
-
-        if pd.notna(do15) and do15 <= 0.1:
-            state = "⚠ Ανοξία ≥15m"
-        elif pd.notna(do20) and do20 <= 0.1:
-            state = "⚠ Ανοξία ≥20m"
-        elif pd.notna(do20) and do20 < 2:
-            state = "Μερική ανάκαμψη"
-        elif pd.notna(do15) and do15 > 4:
-            state = "Αρχή κυκλοφορίας"
-        else:
-            state = "Πλήρης οξυγόνωση"
-
-        rows.append({
-            "Ημερομηνία": _format_date_gr(d),
-            "DO @ 1m": round(do1, 2) if pd.notna(do1) else np.nan,
-            "DO @ 10m": round(do10, 2) if pd.notna(do10) else np.nan,
-            "DO @ 15m": round(do15, 2) if pd.notna(do15) else np.nan,
-            "DO @ 20m": round(do20, 2) if pd.notna(do20) else np.nan,
-            "Κατάσταση": state,
-        })
-    return pd.DataFrame(rows)
-
-
-def _build_mn_summary(df_in):
-    src = _prepare_report_source(df_in)
-    rows = []
-
-    for d in sorted(src["date"].dropna().unique()):
-        sub = src[src["date"] == d].copy()
-
-        mn1 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 1)
-        mn10 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 10)
-        mn12 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 12)
-        mn15 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 15)
-        mn20 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 20)
-
-        rows.append({
-            "Ημερομηνία": _format_date_gr(d),
-            "Mn @ 1m": round(mn1, 3) if pd.notna(mn1) else np.nan,
-            "Mn @ 10m": round(mn10, 3) if pd.notna(mn10) else np.nan,
-            "Mn @ 12m": round(mn12, 3) if pd.notna(mn12) else np.nan,
-            "Mn @ 15m": round(mn15, 3) if pd.notna(mn15) else np.nan,
-            "Mn @ 20m": round(mn20, 3) if pd.notna(mn20) else np.nan,
-        })
-    return pd.DataFrame(rows)
-
-
-def _build_toc_summary(df_in):
-    src = _prepare_report_source(df_in)
-    rows = []
-
-    for d in sorted(src["date"].dropna().unique()):
-        sub = src[src["date"] == d].copy()
-        vals = pd.to_numeric(sub["TOC (mg/L)"], errors="coerce").dropna()
-        if vals.empty:
-            continue
-        rows.append({
-            "Ημερομηνία": _format_date_gr(d),
-            "Εύρος TOC (mg/L)": f"{vals.min():.2f}–{vals.max():.2f}",
-            "Μέση τιμή (mg/L)": round(vals.mean(), 2),
-            "N σημεία": int(vals.count()),
-            "TOC_min": float(vals.min()),
-            "TOC_max": float(vals.max()),
-            "TOC_mean": float(vals.mean()),
-            "date_raw": pd.to_datetime(d),
-        })
-
-    return pd.DataFrame(rows)
-
-
-def _build_chla_summary(df_in):
-    src = _prepare_report_source(df_in)
-    rows = []
-
-    for d in sorted(src["date"].dropna().unique()):
-        sub = src[src["date"] == d].copy()
-        chla = pd.to_numeric(sub["Χλωροφύλλη-α (μg/L)"], errors="coerce").dropna()
-        secchi = pd.to_numeric(sub["Δίσκος Secchi (m)"], errors="coerce").dropna()
-        t_surface = _surface_value(sub, "Θερμοκρασία (°C)")
-
-        if pd.isna(t_surface):
-            flag = ""
-        elif t_surface > 15:
-            flag = "Ναι (T>15°C)"
-        elif t_surface >= 14:
-            flag = "Οριακά"
-        else:
-            flag = "Όχι"
-
-        rows.append({
-            "Ημερομηνία": _format_date_gr(d),
-            "Chl-a (μg/L)": f"{chla.min():.1f}–{chla.max():.1f}" if not chla.empty else "—",
-            "Secchi (m)": f"{secchi.min():.1f}–{secchi.max():.1f}" if not secchi.empty else "—",
-            "WST ~(°C)": round(t_surface, 1) if pd.notna(t_surface) else np.nan,
-            "Ευνοϊκό για λεύκανση;": flag,
-            "Chla_min": float(chla.min()) if not chla.empty else np.nan,
-            "Chla_max": float(chla.max()) if not chla.empty else np.nan,
-            "Chla_mean": float(chla.mean()) if not chla.empty else np.nan,
-            "Secchi_mean": float(secchi.mean()) if not secchi.empty else np.nan,
-            "date_raw": pd.to_datetime(d),
-        })
-
-    return pd.DataFrame(rows)
-
-
-def _build_chem_summary(df_in):
-    src = _prepare_report_source(df_in)
-    rows = []
-
-    for d in sorted(src["date"].dropna().unique()):
-        sub = src[src["date"] == d].copy()
-
-        ec1 = _value_at_depth(sub, "Αγωγιμότητα (μS/cm)", 1)
-        ec12 = _value_at_depth(sub, "Αγωγιμότητα (μS/cm)", 12)
-        ec20 = _value_at_depth(sub, "Αγωγιμότητα (μS/cm)", 20)
-
-        ca_vals = pd.to_numeric(sub["Ca (mg/L)"], errors="coerce").dropna()
-        alk_vals = pd.to_numeric(sub["Αλκαλικότητα"], errors="coerce").dropna()
-
-        rows.append({
-            "Ημερομηνία": _format_date_gr(d),
-            "EC @ 1m": round(ec1, 1) if pd.notna(ec1) else np.nan,
-            "EC @ 12m": round(ec12, 1) if pd.notna(ec12) else np.nan,
-            "EC @ 20m": round(ec20, 1) if pd.notna(ec20) else np.nan,
-            "Ca mean": round(ca_vals.mean(), 2) if not ca_vals.empty else np.nan,
-            "Αλκαλικότητα mean": round(alk_vals.mean(), 2) if not alk_vals.empty else np.nan,
-            "date_raw": pd.to_datetime(d),
-        })
-
-    return pd.DataFrame(rows)
-
-
-def _build_confirmation_table():
-    return pd.DataFrame([
-        ["Διμικτικός ταμιευτήρας — εποχιακή στρωμάτωση/ανάμιξη", "Θερμοκρασία ανά βάθος", "✅ Πλήρης επιβεβαίωση"],
-        ["Υπολιμνιακή ανοξία", "DO ανά βάθος", "✅ Άμεση επιβεβαίωση"],
-        ["Αναγωγική κινητοποίηση Mn²⁺", "Mn²⁺ ανά βάθος", "✅ Επιβεβαίωση μηχανισμού"],
-        ["Αυξημένο TOC μετά την πυρκαγιά", "TOC", "✅ Συνεπές με την αυξημένη περίοδο"],
-        ["Αυξημένη φυτοπλαγκτονική μεταβλητότητα", "Χλωροφύλλη-α", "✅ Επιβεβαίωση"],
-        ["Μηχανισμός αιχμής Mn Μαΐου 2025", "DO + Mn + υδροληψίες", "✅ Υποστηρίζεται ισχυρά"],
-        ["Ανάγκη depth-resolved DO/Mn", "DO + Mn ανά βάθος", "✅ Εκπληρώθηκε"],
-        ["Δυναμικό οξειδοαναγωγής ιζήματος", "Eh", "⬜ Εκκρεμεί"],
-    ], columns=["Συμπέρασμα Lioumbas et al. (2025)", "Παράμετρος", "Αποτέλεσμα"])
-
-
-def _build_depth_time_matrix(df_in, point_id, param_name):
-    src = _prepare_report_source(df_in)
-    src = src[src["point"] == point_id][["date", "depth_m", param_name]].copy()
-    src[param_name] = pd.to_numeric(src[param_name], errors="coerce")
-    src = src.dropna(subset=["date", "depth_m", param_name])
-    if src.empty or src["date"].nunique() < 2 or src["depth_m"].nunique() < 2:
-        return pd.DataFrame()
-    piv = src.groupby(["depth_m", "date"])[param_name].mean().unstack("date").sort_index()
-    return piv
-
-
-def _add_report_section_title(txt):
-    st.markdown(f"### {txt}")
-
-
-def _report_plot(fig, title=None, height=420):
-    _apply_dark(fig, title=title, height=height)
-    st.plotly_chart(fig, use_container_width=True, theme=None)
 
 # ─── TABS ──────────────────────────────────────────────────────────────────────
 GEE_PARAMETER_OPTIONS = [
@@ -2706,14 +2303,12 @@ def _run_lake_height_analysis(collection, polygon_geom, method: str, threshold: 
     return pd.DataFrame(rows).dropna(how="all").sort_values("date")
 
 
-tab_level, tab_map, tab_gee, tab_ts, tab_3d, tab_depth, tab_report, tab_compare, tab_raw = st.tabs([
+tab_level, tab_map, tab_ts, tab_3d, tab_depth, tab_compare, tab_raw = st.tabs([
     "Στάθμη",
     "Map",
-    "GEE Explorer v4",
     "Time Series",
     "3D Maps",
     "Depth Profiles",
-    "Scientific Interpretation",
     "Compare Points",
     "Data",
 ])
@@ -2766,7 +2361,7 @@ with tab_map:
     st.dataframe(table_view, use_container_width=True, hide_index=True)
 
 # TAB 2: GEE EXPLORER
-with tab_gee:
+if False:
     st.subheader("Interactive Water Quality Explorer (GEE v4)")
     st.caption(
         "Modes: ROI, Transect, Lake Height. Includes Gadouras calibrated chlorophyll models. "
@@ -3099,7 +2694,7 @@ with tab_gee:
 with tab_ts:
     st.subheader("Χρονοσειρές Παραμέτρων")
     
-    col_a, col_b, col_c = st.columns(1) if _is_mobile else st.columns([2, 2, 2])
+    col_a, col_b, col_c = st.columns([2, 2, 2])
     
     with col_a:
         param = st.selectbox(
@@ -3520,7 +3115,7 @@ with tab_3d:
     st.subheader("Unified 3D Georeferenced Map")
     st.caption(f"Data source path: `{MEASUREMENTS_SOURCE_PATH}`")
 
-    c3d_a, c3d_b, c3d_c = st.columns(1) if _is_mobile else st.columns([2, 2, 2])
+    c3d_a, c3d_b, c3d_c = st.columns([2, 2, 2])
     with c3d_a:
         param_3d = st.selectbox(
             "Παράμετρος 3D",
@@ -3720,22 +3315,25 @@ with tab_depth:
 
             st.markdown("**Εξαγωγή δεδομένων προφίλ**")
             st.caption("Κατεβάστε τα δεδομένα των προφίλ ως CSV ή όλα τα επιλεγμένα διαγράμματα ως ενιαίο PNG υψηλής ανάλυσης.")
-            st.download_button(
-                "⬇️ Εξαγωγή CSV",
-                data=csv_dp,
-                file_name="depth_profiles_data.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="depth_profiles_export_csv",
-            )
-            st.download_button(
-                "🖼️ Εξαγωγή διαγραμμάτων PNG",
-                data=png_dp,
-                file_name="depth_profiles_charts.png",
-                mime="image/png",
-                use_container_width=True,
-                key="depth_profiles_export_png",
-            )
+            export_dp_col_csv, export_dp_col_png, export_dp_col_spacer = st.columns([1, 1, 3])
+            with export_dp_col_csv:
+                st.download_button(
+                    "⬇️ Εξαγωγή CSV",
+                    data=csv_dp,
+                    file_name="depth_profiles_data.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="depth_profiles_export_csv",
+                )
+            with export_dp_col_png:
+                st.download_button(
+                    "🖼️ Εξαγωγή διαγραμμάτων PNG",
+                    data=png_dp,
+                    file_name="depth_profiles_charts.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key="depth_profiles_export_png",
+                )
             
             for row_idx, sel_date_dp in enumerate(dates_sorted):
                 sub = df[df["date"] == sel_date_dp].copy()
@@ -3764,7 +3362,7 @@ with tab_depth:
                             fig_p.add_trace(go.Scatter(
                                 x=psub[param], y=psub["depth_m"],
                                 mode="lines+markers",
-                                name=f"Σημείο {int(pt)}",
+                                name=f"Σ{int(pt)}",
                                 line=dict(color=clr, width=2.0),
                                 marker=dict(size=6, color=clr, line=dict(width=1.0, color="#ffffff")),
                             ))
@@ -3775,16 +3373,16 @@ with tab_depth:
                         fig_p.add_trace(go.Scatter(
                             x=psub[param], y=psub["depth_m"],
                             mode="lines+markers",
-                            name=f"Σημείο {sel_point_dp}",
+                            name=f"Σ{sel_point_dp}",
                             line=dict(color="#2e86c1", width=2.1),
-                            marker=dict(size=7, color="#1a5276", line=dict(width=1.2, color="#ffffff"))
+                            marker=dict(size=7, color="#1a5276", line=dict(width=1.2, color="#ffffff")),
                         ))
                     
                     if len(fig_p.data) == 0:
                         continue
                     fig_p.update_layout(
                         xaxis=dict(side="bottom"),
-                        yaxis=dict(title="Βάθος (m)", autorange="reversed"),
+                        yaxis=dict(title="Βάθος (m)", range=depth_axis_range),
                         height=380,
                         plot_bgcolor="#ffffff",
                         paper_bgcolor="#ffffff",
@@ -3820,7 +3418,6 @@ with tab_depth:
                         automargin=True
                     )
                     fig_p.update_yaxes(
-                        range=depth_axis_range,
                         showgrid=True,
                         gridcolor="rgba(148,163,184,0.22)",
                         linecolor="rgba(148,163,184,0.5)",
@@ -3842,359 +3439,6 @@ with tab_depth:
 # ══════════════════════════════════════════════════════════════
 # TAB 4: COMPARE POINTS
 # ══════════════════════════════════════════════════════════════
-with tab_report:
-    st.subheader("3.3.1. Μετρήσεις Πεδίου")
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Εκστρατείες", f"{len(dates)}")
-    m2.metric("Σημεία", f"{df['point'].nunique()}")
-    m3.metric("Βάθη", f"{df['depth'].nunique()}")
-    m4.metric("Παράμετροι", f"{sum(1 for p in COL_MAP if df[p].notna().any())}")
-
-    st.markdown(
-        """
-    Με βάση τις ανωτέρω εκτιμήσεις, έλαβαν χώρα οι παρακάτω μετρήσεις με σκοπό τη μελέτη του κάθε
-    φαινομένου. Συγκεκριμένα, κατά το χρονικό διάστημα Σεπτεμβρίου 2025 – Ιανουαρίου 2026
-    πραγματοποιήθηκαν δέκα εκστρατείες δειγματοληψίας από τον λειτουργό σε πέντε σημεία του
-    ταμιευτήρα (Σημεία 3, 4, 5, 7, 8), με κατακόρυφα προφίλ θερμοκρασίας, διαλυμένου οξυγόνου,
-    ηλεκτρικής αγωγιμότητας και θολότητας ανά βάθος, καθώς και εργαστηριακές αναλύσεις ασβεστίου,
-    μαγνησίου, αλκαλικότητας, αμμωνιακών, δισθενούς σιδήρου, δισθενούς μαγγανίου, ολικού οργανικού
-    άνθρακα, ολικού αζώτου, ολικού φωσφόρου και χλωροφύλλης-α.
-    """
-    )
-
-    # 3.3.2
-    _add_report_section_title("3.3.2. Θερμική Στρωμάτωση και Διμικτικός Χαρακτήρας")
-    st.markdown(
-        """
-    Τα κατακόρυφα θερμοκρασιακά προφίλ τεκμηριώνουν την εποχική στρωμάτωση του ταμιευτήρα και τη
-    σταδιακή μετάβαση προς χειμερινή ανακυκλοφορία. Η διαφορά θερμοκρασίας μεταξύ επιφάνειας και
-    βαθύτερων στρωμάτων μειώνεται προοδευτικά από τον Σεπτέμβριο προς τον Ιανουάριο.
-    """
-    )
-
-    strat_df = _build_stratification_summary(df)
-    st.dataframe(
-        strat_df[["Ημερομηνία", "T @ 1m (°C)", "T @ 10m (°C)", "T @ 15m (°C)", "T @ 20m (°C)", "ΔT (°C)", "Κατάσταση"]],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    if not strat_df.empty:
-        strat_plot = strat_df.copy()
-        strat_plot["date_raw"] = pd.to_datetime(strat_plot["Ημερομηνία"], format="%d.%m.%Y", errors="coerce")
-
-        fig_temp = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_temp.add_trace(
-            go.Scatter(
-                x=strat_plot["date_raw"],
-                y=strat_plot["T @ 1m (°C)"],
-                mode="lines+markers",
-                name="T @ 1m",
-                line=dict(width=2.5),
-            ),
-            secondary_y=False,
-        )
-        fig_temp.add_trace(
-            go.Scatter(
-                x=strat_plot["date_raw"],
-                y=strat_plot["T @ 20m (°C)"],
-                mode="lines+markers",
-                name="T @ 20m",
-                line=dict(width=2.5),
-            ),
-            secondary_y=False,
-        )
-        fig_temp.add_trace(
-            go.Bar(
-                x=strat_plot["date_raw"],
-                y=strat_plot["ΔT (°C)"],
-                name="ΔT",
-                opacity=0.35,
-            ),
-            secondary_y=True,
-        )
-        fig_temp.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-        fig_temp.update_yaxes(title_text="Θερμοκρασία (°C)", secondary_y=False)
-        fig_temp.update_yaxes(title_text="ΔT (°C)", secondary_y=True)
-        _report_plot(fig_temp, "Εξέλιξη θερμικής στρωμάτωσης", 430)
-
-    # 3.3.3
-    _add_report_section_title("3.3.3. Υπολιμνιακή Ανοξία — Διαλυτό Οξυγόνο")
-    st.markdown(
-        """
-    Τα αποτελέσματα των μετρήσεων διαλυμένου οξυγόνου ανά βάθος επαληθεύουν άμεσα την ανάπτυξη
-    βαθιάς υποξίας έως ανοξίας κατά το φθινόπωρο και την αποκατάσταση της οξυγόνωσης κατά τη
-    χειμερινή ανάμιξη.
-    """
-    )
-
-    do_df = _build_do_summary(df)
-    st.dataframe(do_df, use_container_width=True, hide_index=True)
-
-    if not do_df.empty:
-        do_plot = do_df.copy()
-        do_plot["date_raw"] = pd.to_datetime(do_plot["Ημερομηνία"], format="%d.%m.%Y", errors="coerce")
-
-        fig_do = go.Figure()
-        for col in ["DO @ 1m", "DO @ 10m", "DO @ 15m", "DO @ 20m"]:
-            fig_do.add_trace(
-                go.Scatter(
-                    x=do_plot["date_raw"],
-                    y=do_plot[col],
-                    mode="lines+markers",
-                    name=col,
-                    line=dict(width=2.4),
-                )
-            )
-        fig_do.add_hline(y=2, line_dash="dash", line_color="#ef4444")
-        fig_do.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-        fig_do.update_yaxes(title_text="DO (mg/L)")
-        _report_plot(fig_do, "Κατακόρυφη εξέλιξη διαλυμένου οξυγόνου", 430)
-
-    deep_points = sorted(df["point"].dropna().unique().tolist())
-    if deep_points:
-        sel_hov_point = st.selectbox(
-            "Σημείο για heatmap βάθους–χρόνου (DO)",
-            options=deep_points,
-            format_func=lambda x: f"Σημείο {x}",
-            key="report_hov_do_point",
-        )
-        do_hov = _build_depth_time_matrix(df, sel_hov_point, "Διαλυμένο Οξυγόνο DO (mg/L)")
-        if not do_hov.empty:
-            fig_hov_do = px.imshow(
-                do_hov,
-                labels=dict(x="Ημερομηνία", y="Βάθος (m)", color="DO (mg/L)"),
-                color_continuous_scale="RdYlBu",
-                aspect="auto",
-            )
-            fig_hov_do.update_yaxes(autorange="reversed")
-            _report_plot(fig_hov_do, f"Heatmap βάθους–χρόνου DO — Σημείο {sel_hov_point}", 420)
-
-    # 3.3.4
-    _add_report_section_title("3.3.4. Μαγγάνιο (Mn²⁺) — Βαθυμετρική Κατανομή")
-    st.markdown(
-        """
-    Η κατανομή του μαγγανίου παρουσιάζει σαφή βαθυμετρική διαφοροποίηση, συμβατή με μηχανισμό
-    κινητοποίησης σε βαθύτερα στρώματα χαμηλού οξυγόνου.
-    """
-    )
-
-    mn_df = _build_mn_summary(df)
-    st.dataframe(mn_df, use_container_width=True, hide_index=True)
-
-    if not mn_df.empty:
-        mn_plot = mn_df.copy()
-        mn_plot["date_raw"] = pd.to_datetime(mn_plot["Ημερομηνία"], format="%d.%m.%Y", errors="coerce")
-
-        fig_mn = go.Figure()
-        for col in ["Mn @ 1m", "Mn @ 10m", "Mn @ 12m", "Mn @ 15m", "Mn @ 20m"]:
-            fig_mn.add_trace(
-                go.Scatter(
-                    x=mn_plot["date_raw"],
-                    y=mn_plot[col],
-                    mode="lines+markers",
-                    name=col,
-                    line=dict(width=2.3),
-                )
-            )
-        fig_mn.add_hline(y=0.05, line_dash="dash", line_color="#ef4444")
-        fig_mn.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-        fig_mn.update_yaxes(title_text="Mn²⁺ (mg/L)")
-        _report_plot(fig_mn, "Βαθυμετρική εξέλιξη μαγγανίου", 430)
-
-    src_corr = _prepare_report_source(df)[["date", "point", "depth_m", "Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)"]].copy()
-    src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"] = pd.to_numeric(src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"], errors="coerce")
-    src_corr["Mn²⁺ (mg/L)"] = pd.to_numeric(src_corr["Mn²⁺ (mg/L)"], errors="coerce")
-    src_corr = src_corr.dropna(subset=["Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)"])
-    if not src_corr.empty:
-        fig_corr = px.scatter(
-            src_corr,
-            x="Διαλυμένο Οξυγόνο DO (mg/L)",
-            y="Mn²⁺ (mg/L)",
-            color="depth_m",
-            color_continuous_scale="Turbo",
-            labels={
-                "Διαλυμένο Οξυγόνο DO (mg/L)": "DO (mg/L)",
-                "Mn²⁺ (mg/L)": "Mn²⁺ (mg/L)",
-                "depth_m": "Βάθος (m)",
-            },
-        )
-        _report_plot(fig_corr, "Συσχέτιση DO–Mn²⁺", 420)
-
-    # 3.3.5
-    _add_report_section_title("3.3.5. Ολικός Οργανικός Άνθρακας (TOC)")
-    st.markdown(
-        """
-    Ο ολικός οργανικός άνθρακας παραμένει σε σχετικά αυξημένα επίπεδα καθ’ όλη την περίοδο
-    παρακολούθησης, χωρίς έντονες ημερήσιες διακυμάνσεις μεταξύ των σημείων.
-    """
-    )
-
-    toc_df = _build_toc_summary(df)
-    if not toc_df.empty:
-        st.dataframe(
-            toc_df[["Ημερομηνία", "Εύρος TOC (mg/L)", "Μέση τιμή (mg/L)", "N σημεία"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        fig_toc = go.Figure()
-        fig_toc.add_trace(
-            go.Scatter(
-                x=toc_df["date_raw"],
-                y=toc_df["TOC_mean"],
-                mode="lines+markers",
-                name="Μέση τιμή TOC",
-                line=dict(width=2.6),
-            )
-        )
-        fig_toc.add_trace(
-            go.Scatter(
-                x=toc_df["date_raw"],
-                y=toc_df["TOC_max"],
-                mode="lines",
-                name="Μέγιστο TOC",
-                line=dict(width=1.3, dash="dot"),
-            )
-        )
-        fig_toc.add_trace(
-            go.Scatter(
-                x=toc_df["date_raw"],
-                y=toc_df["TOC_min"],
-                mode="lines",
-                name="Ελάχιστο TOC",
-                line=dict(width=1.3, dash="dot"),
-                fill="tonexty",
-            )
-        )
-        fig_toc.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-        fig_toc.update_yaxes(title_text="TOC (mg/L)")
-        _report_plot(fig_toc, "Εξέλιξη TOC", 420)
-
-    # 3.3.6
-    _add_report_section_title("3.3.6. Χλωροφύλλη-α και Συνθήκες Εκκίνησης Λεύκανσης")
-    st.markdown(
-        """
-    Οι τιμές χλωροφύλλης-α και η διακύμανση του βάθους Secchi αποτυπώνουν τη χρονική μεταβλητότητα
-    της βιολογικής δραστηριότητας και των οπτικών συνθηκών του ταμιευτήρα.
-    """
-    )
-
-    chla_df = _build_chla_summary(df)
-    if not chla_df.empty:
-        st.dataframe(
-            chla_df[["Ημερομηνία", "Chl-a (μg/L)", "Secchi (m)", "WST ~(°C)", "Ευνοϊκό για λεύκανση;"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        fig_chla = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_chla.add_trace(
-            go.Scatter(
-                x=chla_df["date_raw"],
-                y=chla_df["Chla_mean"],
-                mode="lines+markers",
-                name="Μέση Chl-a",
-                line=dict(width=2.6),
-            ),
-            secondary_y=False,
-        )
-        fig_chla.add_trace(
-            go.Scatter(
-                x=chla_df["date_raw"],
-                y=chla_df["Secchi_mean"],
-                mode="lines+markers",
-                name="Μέσο Secchi",
-                line=dict(width=2.3, dash="dot"),
-            ),
-            secondary_y=True,
-        )
-        fig_chla.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-        fig_chla.update_yaxes(title_text="Χλωροφύλλη-α (μg/L)", secondary_y=False)
-        fig_chla.update_yaxes(title_text="Secchi (m)", secondary_y=True)
-        _report_plot(fig_chla, "Χλωροφύλλη-α και διαφάνεια νερού", 430)
-
-    # 3.3.7
-    _add_report_section_title("3.3.7. Ηλεκτρική Αγωγιμότητα, Ασβέστιο, Αλκαλικότητα")
-    st.markdown(
-        """
-    Η ηλεκτρική αγωγιμότητα, το ασβέστιο και η αλκαλικότητα παραμένουν εντός του χημικού πλαισίου
-    που είναι συμβατό με καταστάσεις κατακρήμνισης ασβεστιτικού υλικού και διαφοροποίησης των
-    βαθύτερων στρωμάτων.
-    """
-    )
-
-    chem_df = _build_chem_summary(df)
-    if not chem_df.empty:
-        st.dataframe(
-            chem_df[["Ημερομηνία", "EC @ 1m", "EC @ 12m", "EC @ 20m", "Ca mean", "Αλκαλικότητα mean"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        fig_chem = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_chem.add_trace(
-            go.Scatter(
-                x=chem_df["date_raw"],
-                y=chem_df["EC @ 1m"],
-                mode="lines+markers",
-                name="EC @ 1m",
-                line=dict(width=2.5),
-            ),
-            secondary_y=False,
-        )
-        fig_chem.add_trace(
-            go.Scatter(
-                x=chem_df["date_raw"],
-                y=chem_df["EC @ 20m"],
-                mode="lines+markers",
-                name="EC @ 20m",
-                line=dict(width=2.5, dash="dot"),
-            ),
-            secondary_y=False,
-        )
-        fig_chem.add_trace(
-            go.Scatter(
-                x=chem_df["date_raw"],
-                y=chem_df["Ca mean"],
-                mode="lines+markers",
-                name="Ca μέσο",
-                line=dict(width=2.2),
-            ),
-            secondary_y=True,
-        )
-        fig_chem.add_trace(
-            go.Scatter(
-                x=chem_df["date_raw"],
-                y=chem_df["Αλκαλικότητα mean"],
-                mode="lines+markers",
-                name="Αλκαλικότητα μέση",
-                line=dict(width=2.2),
-            ),
-            secondary_y=True,
-        )
-        fig_chem.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-        fig_chem.update_yaxes(title_text="Αγωγιμότητα (μS/cm)", secondary_y=False)
-        fig_chem.update_yaxes(title_text="Ca / Αλκαλικότητα", secondary_y=True)
-        _report_plot(fig_chem, "EC, ασβέστιο και αλκαλικότητα", 440)
-
-    # 3.3.8
-    _add_report_section_title("3.3.8. Συνοπτικός Πίνακας Επιβεβαίωσης")
-    conf_df = _build_confirmation_table()
-    st.dataframe(conf_df, use_container_width=True, hide_index=True)
-
-    st.markdown(
-        """
-    Συνοψίζοντας, τα αποτελέσματα των μετρήσεων πεδίου επαληθεύουν σε μεγάλο βαθμό τις βασικές
-    ερμηνείες του Lioumbas et al. (2025), μετατρέποντας σημαντικό μέρος των προηγούμενων
-    τεκμηριωμένων εκτιμήσεων σε άμεσα υποστηριζόμενα ευρήματα. Ιδιαίτερη διαγνωστική αξία έχουν τα
-    κατακόρυφα προφίλ διαλυμένου οξυγόνου και μαγγανίου, ενώ παραμένουν ανοικτά ζητήματα που
-    αφορούν το δυναμικό οξειδοαναγωγής, τη σύσταση του αιωρούμενου υλικού και την πλήρη τεκμηρίωση
-    των μεταπυρικών εισροών οργανικού φορτίου.
-    """
-    )
-
 with tab_compare:
     st.subheader("Σύγκριση Σημείων – Συγκεκριμένη Ημερομηνία")
     
@@ -4348,22 +3592,25 @@ with tab_raw:
     png = _dataframe_to_png_bytes(raw_table_view, "Ακατέργαστα Δεδομένα")
     st.markdown("**Εξαγωγή πίνακα**")
     st.caption("Κατεβάστε τον τρέχοντα φιλτραρισμένο πίνακα είτε ως CSV είτε ως εικόνα PNG.")
-    st.download_button(
-        "⬇️ Εξαγωγή CSV",
-        data=csv,
-        file_name="monitoring_data.csv",
-        mime="text/csv",
-        use_container_width=True,
-        key="raw_data_export_csv",
-    )
-    st.download_button(
-        "🖼️ Εξαγωγή PNG",
-        data=png,
-        file_name="monitoring_data.png",
-        mime="image/png",
-        use_container_width=True,
-        key="raw_data_export_png",
-    )
+    export_col_csv, export_col_png, export_col_spacer = st.columns([1, 1, 3])
+    with export_col_csv:
+        st.download_button(
+            "⬇️ Εξαγωγή CSV",
+            data=csv,
+            file_name="monitoring_data.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="raw_data_export_csv",
+        )
+    with export_col_png:
+        st.download_button(
+            "🖼️ Εξαγωγή PNG",
+            data=png,
+            file_name="monitoring_data.png",
+            mime="image/png",
+            use_container_width=True,
+            key="raw_data_export_png",
+        )
 
 st.markdown("---")
 st.caption("ΕΥΑΘ · Δορυφορική Παρακολούθηση Φράγματος Γαδουρά · 2025-2026")

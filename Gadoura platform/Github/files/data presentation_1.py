@@ -1610,6 +1610,282 @@ with st.sidebar:
     st.dataframe(legend_view, use_container_width=True, hide_index=True, height=220)
     st.caption("Ο χάρτης παραμένει ορατός σε όλα τα διαγράμματα.")
 
+# ══════════════════════════════════════════════════════════════
+# REPORT / SCIENTIFIC INTERPRETATION HELPERS
+# ══════════════════════════════════════════════════════════════
+def _format_date_gr(x):
+    try:
+        return pd.to_datetime(x).strftime("%d.%m.%Y")
+    except Exception:
+        return ""
+
+
+def _safe_num(v):
+    try:
+        if pd.isna(v):
+            return np.nan
+        return float(v)
+    except Exception:
+        return np.nan
+
+
+def _value_at_depth(sub, param, depth_target, tol=0.6):
+    if param not in sub.columns:
+        return np.nan
+    tmp = sub.copy()
+    tmp[param] = pd.to_numeric(tmp[param], errors="coerce")
+    tmp = tmp.dropna(subset=["depth_m", param])
+    if tmp.empty:
+        return np.nan
+    s = tmp[np.abs(tmp["depth_m"] - depth_target) <= tol][param].dropna()
+    return float(s.mean()) if not s.empty else np.nan
+
+
+def _surface_value(sub, param):
+    if param not in sub.columns:
+        return np.nan
+    tmp = sub.copy()
+    tmp[param] = pd.to_numeric(tmp[param], errors="coerce")
+    tmp = tmp.dropna(subset=[param])
+    s = tmp[tmp["depth_m"] <= 1.0][param].dropna()
+    return float(s.mean()) if not s.empty else np.nan
+
+
+def _deepest_value(sub, param):
+    if param not in sub.columns:
+        return np.nan
+    tmp = sub[["depth_m", param]].copy()
+    tmp[param] = pd.to_numeric(tmp[param], errors="coerce")
+    tmp = tmp.dropna(subset=["depth_m", param]).sort_values("depth_m")
+    if tmp.empty:
+        return np.nan
+    return float(tmp.iloc[-1][param])
+
+
+def _deepest_depth(sub):
+    s = pd.to_numeric(sub["depth_m"], errors="coerce").dropna()
+    return float(s.max()) if not s.empty else np.nan
+
+
+def _prepare_report_source(df_in):
+    src = df_in.copy()
+    src["depth_m"] = src["depth"].apply(depth_to_m)
+    src = src.dropna(subset=["date", "point", "depth_m"])
+    return src
+
+
+def _build_stratification_summary(df_in):
+    src = _prepare_report_source(df_in)
+    rows = []
+
+    for d in sorted(src["date"].dropna().unique()):
+        sub = src[src["date"] == d].copy()
+
+        t1 = _value_at_depth(sub, "Θερμοκρασία (°C)", 1)
+        t10 = _value_at_depth(sub, "Θερμοκρασία (°C)", 10)
+        t15 = _value_at_depth(sub, "Θερμοκρασία (°C)", 15)
+        t20 = _value_at_depth(sub, "Θερμοκρασία (°C)", 20)
+        tdeep = _deepest_value(sub, "Θερμοκρασία (°C)")
+        dt = t1 - tdeep if pd.notna(t1) and pd.notna(tdeep) else np.nan
+
+        if pd.isna(dt):
+            state = ""
+        elif dt >= 10:
+            state = "Έντονη στρωμάτωση"
+        elif dt >= 4:
+            state = "Σταδιακή ψύξη"
+        elif dt >= 1:
+            state = "Αρχή κυκλοφορίας"
+        else:
+            state = "Ανακυκλοφορία / Ισόθερμος"
+
+        rows.append({
+            "Ημερομηνία": _format_date_gr(d),
+            "T @ 1m (°C)": round(t1, 1) if pd.notna(t1) else np.nan,
+            "T @ 10m (°C)": round(t10, 1) if pd.notna(t10) else np.nan,
+            "T @ 15m (°C)": round(t15, 1) if pd.notna(t15) else np.nan,
+            "T @ 20m (°C)": round(t20, 1) if pd.notna(t20) else np.nan,
+            "ΔT (°C)": round(dt, 1) if pd.notna(dt) else np.nan,
+            "Κατάσταση": state,
+        })
+    return pd.DataFrame(rows)
+
+
+def _build_do_summary(df_in):
+    src = _prepare_report_source(df_in)
+    rows = []
+
+    for d in sorted(src["date"].dropna().unique()):
+        sub = src[src["date"] == d].copy()
+
+        do1 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 1)
+        do10 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 10)
+        do15 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 15)
+        do20 = _value_at_depth(sub, "Διαλυμένο Οξυγόνο DO (mg/L)", 20)
+
+        if pd.notna(do15) and do15 <= 0.1:
+            state = "⚠ Ανοξία ≥15m"
+        elif pd.notna(do20) and do20 <= 0.1:
+            state = "⚠ Ανοξία ≥20m"
+        elif pd.notna(do20) and do20 < 2:
+            state = "Μερική ανάκαμψη"
+        elif pd.notna(do15) and do15 > 4:
+            state = "Αρχή κυκλοφορίας"
+        else:
+            state = "Πλήρης οξυγόνωση"
+
+        rows.append({
+            "Ημερομηνία": _format_date_gr(d),
+            "DO @ 1m": round(do1, 2) if pd.notna(do1) else np.nan,
+            "DO @ 10m": round(do10, 2) if pd.notna(do10) else np.nan,
+            "DO @ 15m": round(do15, 2) if pd.notna(do15) else np.nan,
+            "DO @ 20m": round(do20, 2) if pd.notna(do20) else np.nan,
+            "Κατάσταση": state,
+        })
+    return pd.DataFrame(rows)
+
+
+def _build_mn_summary(df_in):
+    src = _prepare_report_source(df_in)
+    rows = []
+
+    for d in sorted(src["date"].dropna().unique()):
+        sub = src[src["date"] == d].copy()
+
+        mn1 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 1)
+        mn10 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 10)
+        mn12 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 12)
+        mn15 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 15)
+        mn20 = _value_at_depth(sub, "Mn²⁺ (mg/L)", 20)
+
+        rows.append({
+            "Ημερομηνία": _format_date_gr(d),
+            "Mn @ 1m": round(mn1, 3) if pd.notna(mn1) else np.nan,
+            "Mn @ 10m": round(mn10, 3) if pd.notna(mn10) else np.nan,
+            "Mn @ 12m": round(mn12, 3) if pd.notna(mn12) else np.nan,
+            "Mn @ 15m": round(mn15, 3) if pd.notna(mn15) else np.nan,
+            "Mn @ 20m": round(mn20, 3) if pd.notna(mn20) else np.nan,
+        })
+    return pd.DataFrame(rows)
+
+
+def _build_toc_summary(df_in):
+    src = _prepare_report_source(df_in)
+    rows = []
+
+    for d in sorted(src["date"].dropna().unique()):
+        sub = src[src["date"] == d].copy()
+        vals = pd.to_numeric(sub["TOC (mg/L)"], errors="coerce").dropna()
+        if vals.empty:
+            continue
+        rows.append({
+            "Ημερομηνία": _format_date_gr(d),
+            "Εύρος TOC (mg/L)": f"{vals.min():.2f}–{vals.max():.2f}",
+            "Μέση τιμή (mg/L)": round(vals.mean(), 2),
+            "N σημεία": int(vals.count()),
+            "TOC_min": float(vals.min()),
+            "TOC_max": float(vals.max()),
+            "TOC_mean": float(vals.mean()),
+            "date_raw": pd.to_datetime(d),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _build_chla_summary(df_in):
+    src = _prepare_report_source(df_in)
+    rows = []
+
+    for d in sorted(src["date"].dropna().unique()):
+        sub = src[src["date"] == d].copy()
+        chla = pd.to_numeric(sub["Χλωροφύλλη-α (μg/L)"], errors="coerce").dropna()
+        secchi = pd.to_numeric(sub["Δίσκος Secchi (m)"], errors="coerce").dropna()
+        t_surface = _surface_value(sub, "Θερμοκρασία (°C)")
+
+        if pd.isna(t_surface):
+            flag = ""
+        elif t_surface > 15:
+            flag = "Ναι (T>15°C)"
+        elif t_surface >= 14:
+            flag = "Οριακά"
+        else:
+            flag = "Όχι"
+
+        rows.append({
+            "Ημερομηνία": _format_date_gr(d),
+            "Chl-a (μg/L)": f"{chla.min():.1f}–{chla.max():.1f}" if not chla.empty else "—",
+            "Secchi (m)": f"{secchi.min():.1f}–{secchi.max():.1f}" if not secchi.empty else "—",
+            "WST ~(°C)": round(t_surface, 1) if pd.notna(t_surface) else np.nan,
+            "Ευνοϊκό για λεύκανση;": flag,
+            "Chla_min": float(chla.min()) if not chla.empty else np.nan,
+            "Chla_max": float(chla.max()) if not chla.empty else np.nan,
+            "Chla_mean": float(chla.mean()) if not chla.empty else np.nan,
+            "Secchi_mean": float(secchi.mean()) if not secchi.empty else np.nan,
+            "date_raw": pd.to_datetime(d),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _build_chem_summary(df_in):
+    src = _prepare_report_source(df_in)
+    rows = []
+
+    for d in sorted(src["date"].dropna().unique()):
+        sub = src[src["date"] == d].copy()
+
+        ec1 = _value_at_depth(sub, "Αγωγιμότητα (μS/cm)", 1)
+        ec12 = _value_at_depth(sub, "Αγωγιμότητα (μS/cm)", 12)
+        ec20 = _value_at_depth(sub, "Αγωγιμότητα (μS/cm)", 20)
+
+        ca_vals = pd.to_numeric(sub["Ca (mg/L)"], errors="coerce").dropna()
+        alk_vals = pd.to_numeric(sub["Αλκαλικότητα"], errors="coerce").dropna()
+
+        rows.append({
+            "Ημερομηνία": _format_date_gr(d),
+            "EC @ 1m": round(ec1, 1) if pd.notna(ec1) else np.nan,
+            "EC @ 12m": round(ec12, 1) if pd.notna(ec12) else np.nan,
+            "EC @ 20m": round(ec20, 1) if pd.notna(ec20) else np.nan,
+            "Ca mean": round(ca_vals.mean(), 2) if not ca_vals.empty else np.nan,
+            "Αλκαλικότητα mean": round(alk_vals.mean(), 2) if not alk_vals.empty else np.nan,
+            "date_raw": pd.to_datetime(d),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _build_confirmation_table():
+    return pd.DataFrame([
+        ["Διμικτικός ταμιευτήρας — εποχιακή στρωμάτωση/ανάμιξη", "Θερμοκρασία ανά βάθος", "✅ Πλήρης επιβεβαίωση"],
+        ["Υπολιμνιακή ανοξία", "DO ανά βάθος", "✅ Άμεση επιβεβαίωση"],
+        ["Αναγωγική κινητοποίηση Mn²⁺", "Mn²⁺ ανά βάθος", "✅ Επιβεβαίωση μηχανισμού"],
+        ["Αυξημένο TOC μετά την πυρκαγιά", "TOC", "✅ Συνεπές με την αυξημένη περίοδο"],
+        ["Αυξημένη φυτοπλαγκτονική μεταβλητότητα", "Χλωροφύλλη-α", "✅ Επιβεβαίωση"],
+        ["Μηχανισμός αιχμής Mn Μαΐου 2025", "DO + Mn + υδροληψίες", "✅ Υποστηρίζεται ισχυρά"],
+        ["Ανάγκη depth-resolved DO/Mn", "DO + Mn ανά βάθος", "✅ Εκπληρώθηκε"],
+        ["Δυναμικό οξειδοαναγωγής ιζήματος", "Eh", "⬜ Εκκρεμεί"],
+    ], columns=["Συμπέρασμα Lioumbas et al. (2025)", "Παράμετρος", "Αποτέλεσμα"])
+
+
+def _build_depth_time_matrix(df_in, point_id, param_name):
+    src = _prepare_report_source(df_in)
+    src = src[src["point"] == point_id][["date", "depth_m", param_name]].copy()
+    src[param_name] = pd.to_numeric(src[param_name], errors="coerce")
+    src = src.dropna(subset=["date", "depth_m", param_name])
+    if src.empty or src["date"].nunique() < 2 or src["depth_m"].nunique() < 2:
+        return pd.DataFrame()
+    piv = src.groupby(["depth_m", "date"])[param_name].mean().unstack("date").sort_index()
+    return piv
+
+
+def _add_report_section_title(txt):
+    st.markdown(f"### {txt}")
+
+
+def _report_plot(fig, title=None, height=420):
+    _apply_dark(fig, title=title, height=height)
+    st.plotly_chart(fig, use_container_width=True, theme=None)
+
 # ─── TABS ──────────────────────────────────────────────────────────────────────
 GEE_PARAMETER_OPTIONS = [
     "Water Surface Temperature - Surface Temperature (°C)",
@@ -2258,14 +2534,15 @@ def _run_lake_height_analysis(collection, polygon_geom, method: str, threshold: 
     return pd.DataFrame(rows).dropna(how="all").sort_values("date")
 
 
-tab_level, tab_map, tab_ts, tab_3d, tab_depth, tab_compare, tab_raw = st.tabs([
+tab_level, tab_map, tab_ts, tab_3d, tab_depth, tab_report, tab_compare, tab_raw = st.tabs([
     "Στάθμη",
-    "Map",
-    "Time Series",
-    "3D Maps",
-    "Depth Profiles",
-    "Compare Points",
-    "Data",
+    "Χάρτης",
+    "Χρονοσειρές",
+    "3D Χάρτες",
+    "Κατακόρυφα Προφίλ",
+    "Επιστημονική Ερμηνεία",
+    "Σύγκριση Σημείων",
+    "Δεδομένα",
 ])
 # ══════════════════════════════════════════════════════════════
 # TAB 1: LEVEL
@@ -3390,6 +3667,362 @@ with tab_depth:
                 
                 if row_idx < len(dates_sorted) - 1:
                     st.markdown("---")
+
+# ══════════════════════════════════════════════════════════════
+# TAB: ΕΠΙΣΤΗΜΟΝΙΚΗ ΕΡΜΗΝΕΙΑ
+# ══════════════════════════════════════════════════════════════
+with tab_report:
+    st.subheader("3.3.1. Μετρήσεις Πεδίου")
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Εκστρατείες", f"{len(dates)}")
+    m2.metric("Σημεία", f"{df['point'].nunique()}")
+    m3.metric("Βάθη", f"{df['depth'].nunique()}")
+    m4.metric("Παράμετροι", f"{sum(1 for p in COL_MAP if df[p].notna().any())}")
+
+    st.markdown(
+        """
+    Με βάση τις ανωτέρω εκτιμήσεις, έλαβαν χώρα οι παρακάτω μετρήσεις με σκοπό τη μελέτη του κάθε
+    φαινομένου. Συγκεκριμένα, κατά το χρονικό διάστημα Σεπτεμβρίου 2025 – Ιανουαρίου 2026
+    πραγματοποιήθηκαν δέκα εκστρατείες δειγματοληψίας από τον λειτουργό σε πέντε σημεία του
+    ταμιευτήρα (Σημεία 3, 4, 5, 7, 8), με κατακόρυφα προφίλ θερμοκρασίας, διαλυμένου οξυγόνου,
+    ηλεκτρικής αγωγιμότητας και θολότητας ανά βάθος, καθώς και εργαστηριακές αναλύσεις ασβεστίου,
+    μαγνησίου, αλκαλικότητας, αμμωνιακών, δισθενούς σιδήρου, δισθενούς μαγγανίου, ολικού οργανικού
+    άνθρακα, ολικού αζώτου, ολικού φωσφόρου και χλωροφύλλης-α.
+    """
+    )
+
+    # 3.3.2
+    _add_report_section_title("3.3.2. Θερμική Στρωμάτωση και Διμικτικός Χαρακτήρας")
+    st.markdown(
+        """
+    Τα κατακόρυφα θερμοκρασιακά προφίλ τεκμηριώνουν την εποχική στρωμάτωση του ταμιευτήρα και τη
+    σταδιακή μετάβαση προς χειμερινή ανακυκλοφορία. Η διαφορά θερμοκρασίας μεταξύ επιφάνειας και
+    βαθύτερων στρωμάτων μειώνεται προοδευτικά από τον Σεπτέμβριο προς τον Ιανουάριο.
+    """
+    )
+
+    strat_df = _build_stratification_summary(df)
+    st.dataframe(
+        strat_df[["Ημερομηνία", "T @ 1m (°C)", "T @ 10m (°C)", "T @ 15m (°C)", "T @ 20m (°C)", "ΔT (°C)", "Κατάσταση"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    if not strat_df.empty:
+        strat_plot = strat_df.copy()
+        strat_plot["date_raw"] = pd.to_datetime(strat_plot["Ημερομηνία"], format="%d.%m.%Y", errors="coerce")
+
+        fig_temp = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_temp.add_trace(
+            go.Scatter(
+                x=strat_plot["date_raw"],
+                y=strat_plot["T @ 1m (°C)"],
+                mode="lines+markers",
+                name="T @ 1m",
+                line=dict(width=2.5),
+            ),
+            secondary_y=False,
+        )
+        fig_temp.add_trace(
+            go.Scatter(
+                x=strat_plot["date_raw"],
+                y=strat_plot["T @ 20m (°C)"],
+                mode="lines+markers",
+                name="T @ 20m",
+                line=dict(width=2.5),
+            ),
+            secondary_y=False,
+        )
+        fig_temp.add_trace(
+            go.Bar(
+                x=strat_plot["date_raw"],
+                y=strat_plot["ΔT (°C)"],
+                name="ΔT",
+                opacity=0.35,
+            ),
+            secondary_y=True,
+        )
+        fig_temp.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
+        fig_temp.update_yaxes(title_text="Θερμοκρασία (°C)", secondary_y=False)
+        fig_temp.update_yaxes(title_text="ΔT (°C)", secondary_y=True)
+        _report_plot(fig_temp, "Εξέλιξη θερμικής στρωμάτωσης", 430)
+
+    # 3.3.3
+    _add_report_section_title("3.3.3. Υπολιμνιακή Ανοξία — Διαλυτό Οξυγόνο")
+    st.markdown(
+        """
+    Τα αποτελέσματα των μετρήσεων διαλυμένου οξυγόνου ανά βάθος επαληθεύουν άμεσα την ανάπτυξη
+    βαθιάς υποξίας έως ανοξίας κατά το φθινόπωρο και την αποκατάσταση της οξυγόνωσης κατά τη
+    χειμερινή ανάμιξη.
+    """
+    )
+
+    do_df = _build_do_summary(df)
+    st.dataframe(do_df, use_container_width=True, hide_index=True)
+
+    if not do_df.empty:
+        do_plot = do_df.copy()
+        do_plot["date_raw"] = pd.to_datetime(do_plot["Ημερομηνία"], format="%d.%m.%Y", errors="coerce")
+
+        fig_do = go.Figure()
+        for col in ["DO @ 1m", "DO @ 10m", "DO @ 15m", "DO @ 20m"]:
+            fig_do.add_trace(
+                go.Scatter(
+                    x=do_plot["date_raw"],
+                    y=do_plot[col],
+                    mode="lines+markers",
+                    name=col,
+                    line=dict(width=2.4),
+                )
+            )
+        fig_do.add_hline(y=2, line_dash="dash", line_color="#ef4444")
+        fig_do.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
+        fig_do.update_yaxes(title_text="DO (mg/L)")
+        _report_plot(fig_do, "Κατακόρυφη εξέλιξη διαλυμένου οξυγόνου", 430)
+
+    deep_points = sorted(df["point"].dropna().unique().tolist())
+    if deep_points:
+        sel_hov_point = st.selectbox(
+            "Σημείο για heatmap βάθους–χρόνου (DO)",
+            options=deep_points,
+            format_func=lambda x: f"Σημείο {x}",
+            key="report_hov_do_point",
+        )
+        do_hov = _build_depth_time_matrix(df, sel_hov_point, "Διαλυμένο Οξυγόνο DO (mg/L)")
+        if not do_hov.empty:
+            fig_hov_do = px.imshow(
+                do_hov,
+                labels=dict(x="Ημερομηνία", y="Βάθος (m)", color="DO (mg/L)"),
+                color_continuous_scale="RdYlBu",
+                aspect="auto",
+            )
+            fig_hov_do.update_yaxes(autorange="reversed")
+            _report_plot(fig_hov_do, f"Heatmap βάθους–χρόνου DO — Σημείο {sel_hov_point}", 420)
+
+    # 3.3.4
+    _add_report_section_title("3.3.4. Μαγγάνιο (Mn²⁺) — Βαθυμετρική Κατανομή")
+    st.markdown(
+        """
+    Η κατανομή του μαγγανίου παρουσιάζει σαφή βαθυμετρική διαφοροποίηση, συμβατή με μηχανισμό
+    κινητοποίησης σε βαθύτερα στρώματα χαμηλού οξυγόνου.
+    """
+    )
+
+    mn_df = _build_mn_summary(df)
+    st.dataframe(mn_df, use_container_width=True, hide_index=True)
+
+    if not mn_df.empty:
+        mn_plot = mn_df.copy()
+        mn_plot["date_raw"] = pd.to_datetime(mn_plot["Ημερομηνία"], format="%d.%m.%Y", errors="coerce")
+
+        fig_mn = go.Figure()
+        for col in ["Mn @ 1m", "Mn @ 10m", "Mn @ 12m", "Mn @ 15m", "Mn @ 20m"]:
+            fig_mn.add_trace(
+                go.Scatter(
+                    x=mn_plot["date_raw"],
+                    y=mn_plot[col],
+                    mode="lines+markers",
+                    name=col,
+                    line=dict(width=2.3),
+                )
+            )
+        fig_mn.add_hline(y=0.05, line_dash="dash", line_color="#ef4444")
+        fig_mn.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
+        fig_mn.update_yaxes(title_text="Mn²⁺ (mg/L)")
+        _report_plot(fig_mn, "Βαθυμετρική εξέλιξη μαγγανίου", 430)
+
+    src_corr = _prepare_report_source(df)[["date", "point", "depth_m", "Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)"]].copy()
+    src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"] = pd.to_numeric(src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"], errors="coerce")
+    src_corr["Mn²⁺ (mg/L)"] = pd.to_numeric(src_corr["Mn²⁺ (mg/L)"], errors="coerce")
+    src_corr = src_corr.dropna(subset=["Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)"])
+    if not src_corr.empty:
+        fig_corr = px.scatter(
+            src_corr,
+            x="Διαλυμένο Οξυγόνο DO (mg/L)",
+            y="Mn²⁺ (mg/L)",
+            color="depth_m",
+            color_continuous_scale="Turbo",
+            labels={
+                "Διαλυμένο Οξυγόνο DO (mg/L)": "DO (mg/L)",
+                "Mn²⁺ (mg/L)": "Mn²⁺ (mg/L)",
+                "depth_m": "Βάθος (m)",
+            },
+        )
+        _report_plot(fig_corr, "Συσχέτιση DO–Mn²⁺", 420)
+
+    # 3.3.5
+    _add_report_section_title("3.3.5. Ολικός Οργανικός Άνθρακας (TOC)")
+    st.markdown(
+        """
+    Ο ολικός οργανικός άνθρακας παραμένει σε σχετικά αυξημένα επίπεδα καθ’ όλη την περίοδο
+    παρακολούθησης, χωρίς έντονες ημερήσιες διακυμάνσεις μεταξύ των σημείων.
+    """
+    )
+
+    toc_df = _build_toc_summary(df)
+    if not toc_df.empty:
+        st.dataframe(
+            toc_df[["Ημερομηνία", "Εύρος TOC (mg/L)", "Μέση τιμή (mg/L)", "N σημεία"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        fig_toc = go.Figure()
+        fig_toc.add_trace(
+            go.Scatter(
+                x=toc_df["date_raw"],
+                y=toc_df["TOC_mean"],
+                mode="lines+markers",
+                name="Μέση τιμή TOC",
+                line=dict(width=2.6),
+            )
+        )
+        fig_toc.add_trace(
+            go.Scatter(
+                x=toc_df["date_raw"],
+                y=toc_df["TOC_max"],
+                mode="lines",
+                name="Μέγιστο TOC",
+                line=dict(width=1.3, dash="dot"),
+            )
+        )
+        fig_toc.add_trace(
+            go.Scatter(
+                x=toc_df["date_raw"],
+                y=toc_df["TOC_min"],
+                mode="lines",
+                name="Ελάχιστο TOC",
+                line=dict(width=1.3, dash="dot"),
+                fill="tonexty",
+            )
+        )
+        fig_toc.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
+        fig_toc.update_yaxes(title_text="TOC (mg/L)")
+        _report_plot(fig_toc, "Εξέλιξη TOC", 420)
+
+    # 3.3.6
+    _add_report_section_title("3.3.6. Χλωροφύλλη-α και Συνθήκες Εκκίνησης Λεύκανσης")
+    st.markdown(
+        """
+    Οι τιμές χλωροφύλλης-α και η διακύμανση του βάθους Secchi αποτυπώνουν τη χρονική μεταβλητότητα
+    της βιολογικής δραστηριότητας και των οπτικών συνθηκών του ταμιευτήρα.
+    """
+    )
+
+    chla_df = _build_chla_summary(df)
+    if not chla_df.empty:
+        st.dataframe(
+            chla_df[["Ημερομηνία", "Chl-a (μg/L)", "Secchi (m)", "WST ~(°C)", "Ευνοϊκό για λεύκανση;"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        fig_chla = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_chla.add_trace(
+            go.Scatter(
+                x=chla_df["date_raw"],
+                y=chla_df["Chla_mean"],
+                mode="lines+markers",
+                name="Μέση Chl-a",
+                line=dict(width=2.6),
+            ),
+            secondary_y=False,
+        )
+        fig_chla.add_trace(
+            go.Scatter(
+                x=chla_df["date_raw"],
+                y=chla_df["Secchi_mean"],
+                mode="lines+markers",
+                name="Μέσο Secchi",
+                line=dict(width=2.3, dash="dot"),
+            ),
+            secondary_y=True,
+        )
+        fig_chla.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
+        fig_chla.update_yaxes(title_text="Χλωροφύλλη-α (μg/L)", secondary_y=False)
+        fig_chla.update_yaxes(title_text="Secchi (m)", secondary_y=True)
+        _report_plot(fig_chla, "Χλωροφύλλη-α και διαφάνεια νερού", 430)
+
+    # 3.3.7
+    _add_report_section_title("3.3.7. Ηλεκτρική Αγωγιμότητα, Ασβέστιο, Αλκαλικότητα")
+    st.markdown(
+        """
+    Η ηλεκτρική αγωγιμότητα, το ασβέστιο και η αλκαλικότητα παραμένουν εντός του χημικού πλαισίου
+    που είναι συμβατό με καταστάσεις κατακρήμνισης ασβεστιτικού υλικού και διαφοροποίησης των
+    βαθύτερων στρωμάτων.
+    """
+    )
+
+    chem_df = _build_chem_summary(df)
+    if not chem_df.empty:
+        st.dataframe(
+            chem_df[["Ημερομηνία", "EC @ 1m", "EC @ 12m", "EC @ 20m", "Ca mean", "Αλκαλικότητα mean"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        fig_chem = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_chem.add_trace(
+            go.Scatter(
+                x=chem_df["date_raw"],
+                y=chem_df["EC @ 1m"],
+                mode="lines+markers",
+                name="EC @ 1m",
+                line=dict(width=2.5),
+            ),
+            secondary_y=False,
+        )
+        fig_chem.add_trace(
+            go.Scatter(
+                x=chem_df["date_raw"],
+                y=chem_df["EC @ 20m"],
+                mode="lines+markers",
+                name="EC @ 20m",
+                line=dict(width=2.5, dash="dot"),
+            ),
+            secondary_y=False,
+        )
+        fig_chem.add_trace(
+            go.Scatter(
+                x=chem_df["date_raw"],
+                y=chem_df["Ca mean"],
+                mode="lines+markers",
+                name="Ca μέσο",
+                line=dict(width=2.2),
+            ),
+            secondary_y=True,
+        )
+        fig_chem.add_trace(
+            go.Scatter(
+                x=chem_df["date_raw"],
+                y=chem_df["Αλκαλικότητα mean"],
+                mode="lines+markers",
+                name="Αλκαλικότητα μέση",
+                line=dict(width=2.2),
+            ),
+            secondary_y=True,
+        )
+        fig_chem.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
+        fig_chem.update_yaxes(title_text="Αγωγιμότητα (μS/cm)", secondary_y=False)
+        fig_chem.update_yaxes(title_text="Ca / Αλκαλικότητα", secondary_y=True)
+        _report_plot(fig_chem, "EC, ασβέστιο και αλκαλικότητα", 440)
+
+    # 3.3.8
+    _add_report_section_title("3.3.8. Συνοπτικός Πίνακας Επιβεβαίωσης")
+    conf_df = _build_confirmation_table()
+    st.dataframe(conf_df, use_container_width=True, hide_index=True)
+
+    st.markdown(
+        """
+    Συνοψίζοντας, τα αποτελέσματα των μετρήσεων πεδίου επαληθεύουν σε μεγάλο βαθμό τις βασικές
+    ερμηνείες του Lioumbas et al. (2025), μετατρέποντας σημαντικό μέρος των προηγούμενων
+    τεκμηριωμένων εκτιμήσεων σε άμεσα υποστηριζόμενα ευρήματα. Ιδιαίτερη διαγνωστική αξία έχουν τα
+    κατακόρυφα προφίλ διαλυμένου οξυγόνου και μαγγανίου, ενώ παραμένουν ανοικτά ζητήματα που
+    αφορούν το δυναμικό οξειδοαναγωγής, τη σύσταση του αιωρούμενου υλικού και την πλήρη τεκμηρίωση
+    των μεταπυρικών εισροών οργανικού φορτίου.
+    """
+    )
 
 # ══════════════════════════════════════════════════════════════
 # TAB 4: COMPARE POINTS
