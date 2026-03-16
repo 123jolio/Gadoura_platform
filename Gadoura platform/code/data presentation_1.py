@@ -30,6 +30,8 @@ _PLT_LEGEND_BG = "rgba(10,21,37,.9)"
 _PLT_LEGEND_BORDER = "rgba(6,214,240,.2)"
 _PLT_HOVER_BG = "#0a1525"
 _PLT_HOVER_FONT = "#dff2fa"
+_PLT_SERIES = ["#ef4444", "#2563eb", "#16a34a", "#9333ea", "#ea580c", "#ca8a04", "#0891b2", "#db2777", "#6b7280", "#0f766e"]
+_PLT_MARKER_BORDER = "#f8fafc"
 
 def _dark_layout(**extra):
     base = dict(
@@ -49,7 +51,7 @@ def _dark_layout(**extra):
 
 def _use_light_plot_theme():
     global _PLT_BG, _PLT_PAPER, _PLT_GRID, _PLT_LINE, _PLT_TICK, _PLT_TITLE
-    global _PLT_LEGEND_BG, _PLT_LEGEND_BORDER, _PLT_HOVER_BG, _PLT_HOVER_FONT
+    global _PLT_LEGEND_BG, _PLT_LEGEND_BORDER, _PLT_HOVER_BG, _PLT_HOVER_FONT, _PLT_MARKER_BORDER
     _PLT_BG = "#ffffff"
     _PLT_PAPER = "#ffffff"
     _PLT_GRID = "rgba(15,23,42,.10)"
@@ -60,6 +62,7 @@ def _use_light_plot_theme():
     _PLT_LEGEND_BORDER = "rgba(15,23,42,.12)"
     _PLT_HOVER_BG = "#ffffff"
     _PLT_HOVER_FONT = "#0f172a"
+    _PLT_MARKER_BORDER = "#0f172a"
 
 def _apply_dark(fig, height=None, title=None, **kw):
     layout = _dark_layout(**kw)
@@ -2233,7 +2236,7 @@ with tab_ts:
             st.info("Δεν υπάρχουν διαθέσιμα δεδομένα για τον συνδυασμό που επιλέξατε.")
         else:
             fig = go.Figure()
-            colors = px.colors.qualitative.Set1
+            colors = _PLT_SERIES
             for idx, pt in enumerate(sel_points):
                 sub = grp_nonnull[grp_nonnull["point"] == pt].sort_values("date")
                 if sub.empty:
@@ -2244,7 +2247,7 @@ with tab_ts:
                     mode="lines+markers",
                     name=f"Σημείο {pt}",
                     line=dict(color=clr, width=2),
-                    marker=dict(size=8, color=clr, line=dict(width=1.5, color="white")),
+                    marker=dict(size=8, color=clr, line=dict(width=1.5, color=_PLT_MARKER_BORDER)),
                     hovertemplate=f"<b>Σημείο {pt}</b><br>Ημ/νία: %{{x|%d/%m/%Y}}<br>{param}: %{{y:.3f}}<extra></extra>"
                 ))
             
@@ -2260,15 +2263,15 @@ with tab_ts:
             )
             fig.update_layout(
                 font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-                hoverlabel=dict(bgcolor="#0a1525", font_color="#dff2fa", bordercolor="rgba(6,214,240,.3)"),
+                hoverlabel=dict(bgcolor=_PLT_HOVER_BG, font_color=_PLT_HOVER_FONT, bordercolor=_PLT_LEGEND_BORDER),
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
                     y=1.02,
                     xanchor="right",
                     x=1,
-                    bgcolor="rgba(13,30,47,.85)",
-                    bordercolor="rgba(6,214,240,.2)",
+                    bgcolor=_PLT_LEGEND_BG,
+                    bordercolor=_PLT_LEGEND_BORDER,
                     borderwidth=1,
                     font=dict(color=_PLT_TICK)
                 ),
@@ -2350,8 +2353,8 @@ with tab_ts:
                     y=avg_ts[param],
                     mode="lines+markers",
                     name="Average",
-                    line=dict(color="#06d6f0", width=3),
-                    marker=dict(size=8, color="#0369a1", line=dict(width=1, color="white")),
+                    line=dict(color=_PLT_SERIES[1], width=3),
+                    marker=dict(size=8, color=_PLT_SERIES[1], line=dict(width=1, color=_PLT_MARKER_BORDER)),
                     hovertemplate="Date: %{x|%d/%m/%Y}<br>Average: %{y:.3f}<extra></extra>",
                 ))
                 fig_avg.update_layout(
@@ -2511,7 +2514,7 @@ with tab_ts:
                                         y=strat_ts["delta_do"],
                                         mode="lines+markers",
                                         name="ΔDO (Surface-Deep)",
-                                        line=dict(color="#06d6f0", width=2.5),
+                                        line=dict(color=_PLT_SERIES[1], width=2.5),
                                     ),
                                     secondary_y=True,
                                 )
@@ -2527,8 +2530,8 @@ with tab_ts:
                                     y=1.02,
                                     xanchor="left",
                                     x=0,
-                                    bgcolor="rgba(13,30,47,.85)",
-                                    bordercolor="rgba(6,214,240,.2)",
+                                    bgcolor=_PLT_LEGEND_BG,
+                                    bordercolor=_PLT_LEGEND_BORDER,
                                     borderwidth=1,
                                 ),
                                 margin=dict(t=55, b=25, l=45, r=45),
@@ -2566,7 +2569,7 @@ with tab_ts:
                 mu = float(global_vals.mean())
                 sigma = float(global_vals.std(ddof=0))
                 anom_ts["z"] = (anom_ts[param] - mu) / sigma
-                bar_colors = ["#ef4444" if abs(v) >= 2 else "#06d6f0" for v in anom_ts["z"]]
+                bar_colors = ["#ef4444" if abs(v) >= 2 else _PLT_SERIES[1] for v in anom_ts["z"]]
 
                 fig_anom = go.Figure()
                 fig_anom.add_trace(go.Bar(
@@ -2964,7 +2967,7 @@ with tab_compare:
         
         if radar_params:
             fig_r = go.Figure()
-            colors_r = px.colors.qualitative.Set1
+            colors_r = _PLT_SERIES
             for idx, row_r in grp_cmp.iterrows():
                 vals = [row_r[p] for p in radar_params]
                 if all(np.isnan(v) for v in vals):
