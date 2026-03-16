@@ -1,4 +1,5 @@
 ﻿import streamlit as st
+import base64
 import pandas as pd
 import numpy as np
 import openpyxl
@@ -17,6 +18,7 @@ import os
 import json
 import math
 import sys
+import streamlit.components.v1 as components
 from typing import Any, Dict, Optional, Tuple
 
 # ── Dark Plotly theme ─────────────────────────────────────────────────────────
@@ -194,6 +196,186 @@ def _read_binary_file(path: str) -> bytes:
     return Path(path).read_bytes()
 
 
+def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 960) -> None:
+    pdf_b64 = base64.b64encode(file_bytes).decode("ascii")
+    safe_name = json.dumps(file_name, ensure_ascii=False)
+    viewer_html = f"""
+    <div id="pdf-shell">
+      <div id="pdf-toolbar">
+        <button id="pdf-prev" type="button">Προηγούμενη</button>
+        <span id="pdf-status">Φόρτωση PDF...</span>
+        <button id="pdf-next" type="button">Επόμενη</button>
+        <a id="pdf-open" target="_blank" rel="noopener noreferrer">Άνοιγμα</a>
+      </div>
+      <div id="pdf-viewer">
+        <canvas id="pdf-canvas"></canvas>
+        <div id="pdf-error"></div>
+      </div>
+    </div>
+    <style>
+      body {{
+        margin: 0;
+        background: #ffffff;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: #0f172a;
+      }}
+      #pdf-shell {{
+        border: 1px solid #dbe4ee;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #ffffff;
+      }}
+      #pdf-toolbar {{
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid #dbe4ee;
+        background: #f8fafc;
+        position: sticky;
+        top: 0;
+      }}
+      #pdf-toolbar button,
+      #pdf-toolbar a {{
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #ffffff;
+        color: #0f172a;
+        padding: 6px 10px;
+        font-size: 13px;
+        text-decoration: none;
+        cursor: pointer;
+      }}
+      #pdf-toolbar button:disabled {{
+        opacity: 0.45;
+        cursor: not-allowed;
+      }}
+      #pdf-status {{
+        flex: 1;
+        text-align: center;
+        font-size: 13px;
+        color: #334155;
+      }}
+      #pdf-viewer {{
+        padding: 14px;
+        background: #e5e7eb;
+        min-height: {max(height - 70, 320)}px;
+        overflow: auto;
+        text-align: center;
+      }}
+      #pdf-canvas {{
+        max-width: 100%;
+        height: auto;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+        background: #ffffff;
+      }}
+      #pdf-error {{
+        display: none;
+        color: #b91c1c;
+        font-size: 13px;
+        padding-top: 12px;
+      }}
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      const pdfBase64 = "{pdf_b64}";
+      const fileName = {safe_name};
+      const raw = atob(pdfBase64);
+      const pdfBytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+      const blob = new Blob([pdfBytes], {{ type: "application/pdf" }});
+      const blobUrl = URL.createObjectURL(blob);
+      const openLink = document.getElementById("pdf-open");
+      openLink.href = blobUrl;
+      openLink.download = fileName;
+
+      const statusEl = document.getElementById("pdf-status");
+      const errorEl = document.getElementById("pdf-error");
+      const prevBtn = document.getElementById("pdf-prev");
+      const nextBtn = document.getElementById("pdf-next");
+      const viewerEl = document.getElementById("pdf-viewer");
+      const canvas = document.getElementById("pdf-canvas");
+      const ctx = canvas.getContext("2d");
+
+      let pdfDoc = null;
+      let pageNum = 1;
+      let rendering = false;
+      let pendingPage = null;
+
+      function updateButtons() {{
+        prevBtn.disabled = !pdfDoc || pageNum <= 1;
+        nextBtn.disabled = !pdfDoc || pageNum >= pdfDoc.numPages;
+      }}
+
+      function queueRender(num) {{
+        if (rendering) {{
+          pendingPage = num;
+          return;
+        }}
+        renderPage(num);
+      }}
+
+      function renderPage(num) {{
+        rendering = true;
+        pdfDoc.getPage(num).then((page) => {{
+          const baseViewport = page.getViewport({{ scale: 1 }});
+          const availableWidth = Math.max(viewerEl.clientWidth - 32, 320);
+          const scale = availableWidth / baseViewport.width;
+          const viewport = page.getViewport({{ scale }});
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          return page.render({{ canvasContext: ctx, viewport }}).promise;
+        }}).then(() => {{
+          rendering = false;
+          statusEl.textContent = `Σελίδα ${{pageNum}} / ${{pdfDoc.numPages}}`;
+          updateButtons();
+          if (pendingPage !== null) {{
+            const nextPage = pendingPage;
+            pendingPage = null;
+            renderPage(nextPage);
+          }}
+        }}).catch((error) => {{
+          rendering = false;
+          errorEl.style.display = "block";
+          errorEl.textContent = `Το preview PDF δεν φόρτωσε: ${{error.message || error}}`;
+          statusEl.textContent = "Αποτυχία φόρτωσης PDF";
+        }});
+      }}
+
+      prevBtn.addEventListener("click", () => {{
+        if (pageNum <= 1) return;
+        pageNum -= 1;
+        queueRender(pageNum);
+      }});
+
+      nextBtn.addEventListener("click", () => {{
+        if (!pdfDoc || pageNum >= pdfDoc.numPages) return;
+        pageNum += 1;
+        queueRender(pageNum);
+      }});
+
+      window.addEventListener("resize", () => {{
+        if (pdfDoc) {{
+          queueRender(pageNum);
+        }}
+      }});
+
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      pdfjsLib.getDocument({{ data: pdfBytes }}).promise.then((doc) => {{
+        pdfDoc = doc;
+        statusEl.textContent = `Σελίδα 1 / ${{doc.numPages}}`;
+        updateButtons();
+        renderPage(pageNum);
+      }}).catch((error) => {{
+        errorEl.style.display = "block";
+        errorEl.textContent = `Το preview PDF δεν φόρτωσε: ${{error.message || error}}`;
+        statusEl.textContent = "Αποτυχία φόρτωσης PDF";
+        updateButtons();
+      }});
+    </script>
+    """
+    components.html(viewer_html, height=height, scrolling=False)
+
+
 def render_deliverables_view() -> None:
     st.subheader("Παραδοτέα Έργου")
     st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
@@ -237,7 +419,7 @@ def render_deliverables_view() -> None:
 
     suffix = selected_file.suffix.lower()
     if suffix == ".pdf":
-        st.info("Για τα PDF χρησιμοποιήστε τη λήψη αρχείου.")
+        _render_pdf_preview(file_bytes, selected_file.name)
     elif suffix in {".png", ".jpg", ".jpeg"}:
         st.image(file_bytes, use_container_width=True)
     else:
