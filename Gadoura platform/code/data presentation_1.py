@@ -3406,11 +3406,27 @@ with tab_raw:
 
     csv = raw_table_view.to_csv(index=False).encode("utf-8-sig")
     png = _dataframe_to_png_bytes(raw_table_view, "Ακατέργαστα Δεδομένα")
-    export_col_csv, export_col_png = st.columns(2)
+    st.markdown("**Εξαγωγή πίνακα**")
+    st.caption("Κατεβάστε τον τρέχοντα φιλτραρισμένο πίνακα είτε ως CSV είτε ως εικόνα PNG.")
+    export_col_csv, export_col_png, export_col_spacer = st.columns([1, 1, 3])
     with export_col_csv:
-        st.download_button("⬇️ Λήψη CSV", data=csv, file_name="monitoring_data.csv", mime="text/csv", use_container_width=True)
+        st.download_button(
+            "⬇️ Εξαγωγή CSV",
+            data=csv,
+            file_name="monitoring_data.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="raw_data_export_csv",
+        )
     with export_col_png:
-        st.download_button("🖼️ Λήψη PNG", data=png, file_name="monitoring_data.png", mime="image/png", use_container_width=True)
+        st.download_button(
+            "🖼️ Εξαγωγή PNG",
+            data=png,
+            file_name="monitoring_data.png",
+            mime="image/png",
+            use_container_width=True,
+            key="raw_data_export_png",
+        )
 
 st.markdown("---")
 st.caption("ΕΥΑΘ · Δορυφορική Παρακολούθηση Φράγματος Γαδουρά · 2025-2026")
