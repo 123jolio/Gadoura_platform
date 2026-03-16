@@ -145,7 +145,7 @@ APP_SECONDARY_LOGO_PATH = next(
             PLATFORM_ROOT / "eyath_services.png",
             APP_DIR / "eyath_services.png",
         ]
-        if path.exists()
+        if path.exists() and path.is_file()
     ),
     None,
 )
@@ -154,19 +154,22 @@ APP_SECONDARY_LOGO_URI = _image_path_to_data_uri(APP_SECONDARY_LOGO_PATH)
 
 def render_main_header() -> None:
     secondary_logo_html = (
-        f'<img src="{APP_SECONDARY_LOGO_URI}" class="hcard-logo hcard-logo-secondary" alt="ΕΥΑΘ Υπηρεσίες" '
-        'style="height:48px;width:auto;max-width:160px;display:block;object-fit:contain;flex-shrink:0;'
-        'padding:.35rem .65rem;border-radius:12px;background:rgba(255,255,255,.96);border:1px solid rgba(15,23,42,.08);" />'
+        f"""<div class="hcard-logo-shell hcard-logo-shell-secondary">
+              <img src="{APP_SECONDARY_LOGO_URI}" class="hcard-logo hcard-logo-secondary" alt="ΕΥΑΘ Υπηρεσίες"
+                   width="232" height="88" />
+            </div>"""
         if APP_SECONDARY_LOGO_URI
         else ""
     )
     st.markdown(
         f"""<div class="hcard">
               <div class="hcard-logos">
-                <img src="{APP_LOGO_URL}" class="hcard-logo hcard-logo-primary"
-                     alt="ΕΥΑΘ"
-                     style="height:60px;width:auto;max-width:260px;display:block;object-fit:contain;flex-shrink:0;"
-                     onerror="this.style.display='none'" />
+                <div class="hcard-logo-shell hcard-logo-shell-primary">
+                  <img src="{APP_LOGO_URL}" class="hcard-logo hcard-logo-primary"
+                       alt="ΕΥΑΘ"
+                       width="260" height="60"
+                       onerror="this.closest('.hcard-logo-shell-primary').style.display='none'" />
+                </div>
                 {secondary_logo_html}
               </div>
               <div class="hcard-copy">
@@ -1164,10 +1167,13 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 
 .hcard{background:linear-gradient(140deg,#091726 0%,#0d2340 55%,#071520 100%);border:1px solid var(--abdr);border-top:2px solid rgba(6,214,240,.55);border-radius:var(--r);padding:1.6rem 2.5rem;margin-bottom:2rem;display:flex;align-items:center;gap:2.4rem;box-shadow:var(--sh),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden;}
 .hcard::before{content:'';position:absolute;top:-80px;right:-80px;width:260px;height:260px;background:radial-gradient(circle,rgba(6,214,240,.08) 0%,transparent 70%);pointer-events:none;}
-.hcard-logos{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:relative;z-index:1;}
-.hcard-logo{object-fit:contain;flex-shrink:0;display:block;}
-.hcard-logo-primary{height:60px;}
-.hcard-logo-secondary{height:48px;padding:.35rem .65rem;border-radius:12px;background:rgba(255,255,255,.96);border:1px solid rgba(15,23,42,.08);}
+.hcard-logos{display:flex;align-items:center;gap:1rem;flex-wrap:nowrap;position:relative;z-index:1;min-width:0;}
+.hcard-logo-shell{display:flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:0;}
+.hcard-logo-shell-primary{width:260px;height:60px;max-width:min(32vw,260px);}
+.hcard-logo-shell-secondary{width:232px;height:88px;padding:.35rem .65rem;border-radius:12px;background:rgba(255,255,255,.96);border:1px solid rgba(15,23,42,.08);}
+.hcard-logo{object-fit:contain;display:block;width:100%;height:100%;}
+.hcard-logo-primary{max-width:100%;max-height:100%;}
+.hcard-logo-secondary{max-width:100%;max-height:100%;}
 .hcard-copy{position:relative;z-index:1;}
 .hcard h1{font-family:var(--fh)!important;font-size:1.45rem!important;font-weight:700!important;color:#f0faff!important;margin:0 0 .35rem 0!important;line-height:1.3!important;letter-spacing:-.02em!important;}
 .hcard .sub{font-size:.72rem;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
