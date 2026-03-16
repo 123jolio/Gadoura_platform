@@ -2848,6 +2848,29 @@ with tab_depth:
             }
             dp_colors = px.colors.qualitative.Plotly
             dates_sorted = sorted(sel_dates_dp)
+            range_source = df[df["date"].isin(dates_sorted)].copy()
+            if sel_point_dp != "All points":
+                range_source = range_source[range_source["point"] == sel_point_dp]
+            range_source["depth_m"] = range_source["depth"].map(depth_numeric)
+            range_source = range_source.dropna(subset=["depth_m"])
+            param_axis_ranges = {}
+            depth_axis_range = None
+            for param in profile_params:
+                vals = pd.to_numeric(range_source[param], errors="coerce").dropna()
+                if vals.empty:
+                    continue
+                pmin = float(vals.min())
+                pmax = float(vals.max())
+                span = pmax - pmin
+                pad = span * 0.06 if span > 0 else max(abs(pmin) * 0.05, 0.1)
+                param_axis_ranges[param] = [pmin - pad, pmax + pad]
+            depth_vals = pd.to_numeric(range_source["depth_m"], errors="coerce").dropna()
+            if not depth_vals.empty:
+                dmin = float(depth_vals.min())
+                dmax = float(depth_vals.max())
+                dspan = dmax - dmin
+                dpad = dspan * 0.04 if dspan > 0 else max(abs(dmax) * 0.05, 0.5)
+                depth_axis_range = [dmax + dpad, max(0.0, dmin - dpad)]
             
             for row_idx, sel_date_dp in enumerate(dates_sorted):
                 sub = df[df["date"] == sel_date_dp].copy()
@@ -2917,34 +2940,22 @@ with tab_depth:
                             font_color="#0f172a",
                             bordercolor="#cbd5e1"
                         ),
-                        margin=dict(t=16, b=36, l=52, r=12)
-                    )
-                    fig_p.add_annotation(
-                        text=f"<b>{param}</b>",
-                        xref="paper",
-                        yref="paper",
-                        x=0.03,
-                        y=0.98,
-                        xanchor="left",
-                        yanchor="top",
-                        showarrow=False,
-                        font=dict(size=14, color="#0f172a", family="Plus Jakarta Sans, sans-serif"),
-                        bgcolor="rgba(255,255,255,0.88)",
-                        bordercolor="#e2e8f0",
-                        borderwidth=1,
-                        borderpad=4,
+                        margin=dict(t=10, b=56, l=52, r=12)
                     )
                     fig_p.update_xaxes(
-                        title_text=None,
+                        title_text=param,
                         side="bottom",
+                        range=param_axis_ranges.get(param),
                         showgrid=True,
                         gridcolor="rgba(148,163,184,0.22)",
                         linecolor="rgba(148,163,184,0.5)",
                         tickfont=dict(color="#334155", family="Plus Jakarta Sans, sans-serif"),
                         title_font=dict(color="#0f172a"),
+                        title_standoff=12,
                         automargin=True
                     )
                     fig_p.update_yaxes(
+                        range=depth_axis_range,
                         showgrid=True,
                         gridcolor="rgba(148,163,184,0.22)",
                         linecolor="rgba(148,163,184,0.5)",
