@@ -1,4 +1,5 @@
 ﻿import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import openpyxl
@@ -8,6 +9,7 @@ from plotly.subplots import make_subplots
 from plotly.colors import sample_colorscale
 import pydeck as pdk
 import re
+import base64
 from pathlib import Path
 from io import BytesIO
 import time
@@ -217,6 +219,137 @@ def _render_pdf_page_png(path: str, page_index: int, zoom: float = 1.8) -> bytes
         return pix.tobytes("png")
 
 
+def _render_pdf_with_pdfjs(file_bytes: bytes, viewer_key: str, height: int = 1100) -> None:
+    viewer_id = re.sub(r"[^a-zA-Z0-9_-]", "_", viewer_key)
+    pdf_b64 = base64.b64encode(file_bytes).decode("ascii")
+    components.html(
+        f"""
+        <div class="pdfjs-shell">
+          <div class="pdfjs-toolbar">
+            <button id="{viewer_id}-prev" type="button">Προηγούμενη</button>
+            <span id="{viewer_id}-status">Φόρτωση PDF...</span>
+            <button id="{viewer_id}-next" type="button">Επόμενη</button>
+          </div>
+          <div class="pdfjs-stage">
+            <canvas id="{viewer_id}-canvas"></canvas>
+          </div>
+        </div>
+        <style>
+          .pdfjs-shell {{
+            background: #ffffff;
+            border: 1px solid rgba(15, 23, 42, 0.10);
+            border-radius: 16px;
+            padding: 0.75rem;
+          }}
+          .pdfjs-toolbar {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            font-family: sans-serif;
+            color: #0f172a;
+          }}
+          .pdfjs-toolbar button {{
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            background: #f8fafc;
+            border-radius: 999px;
+            padding: 0.35rem 0.85rem;
+            cursor: pointer;
+          }}
+          .pdfjs-toolbar button:disabled {{
+            opacity: 0.45;
+            cursor: default;
+          }}
+          .pdfjs-stage {{
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: auto;
+            max-height: {height - 70}px;
+            background: #e2e8f0;
+            border-radius: 12px;
+            padding: 0.5rem;
+          }}
+          #{viewer_id}-canvas {{
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.10);
+            background: #ffffff;
+          }}
+        </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+        <script>
+          const pdfBase64 = "{pdf_b64}";
+          const canvas = document.getElementById("{viewer_id}-canvas");
+          const statusEl = document.getElementById("{viewer_id}-status");
+          const prevBtn = document.getElementById("{viewer_id}-prev");
+          const nextBtn = document.getElementById("{viewer_id}-next");
+          const workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+          function base64ToUint8Array(base64Value) {{
+            const raw = atob(base64Value);
+            const output = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i += 1) {{
+              output[i] = raw.charCodeAt(i);
+            }}
+            return output;
+          }}
+
+          async function initPdfViewer() {{
+            if (!window.pdfjsLib) {{
+              statusEl.textContent = "Αποτυχία φόρτωσης του PDF viewer.";
+              return;
+            }}
+
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+            const pdf = await pdfjsLib.getDocument({{ data: base64ToUint8Array(pdfBase64) }}).promise;
+            let currentPage = 1;
+
+            async function renderPage(pageNumber) {{
+              const page = await pdf.getPage(pageNumber);
+              const viewport = page.getViewport({{ scale: 1.35 }});
+              const context = canvas.getContext("2d");
+              const devicePixelRatio = window.devicePixelRatio || 1;
+
+              canvas.width = Math.floor(viewport.width * devicePixelRatio);
+              canvas.height = Math.floor(viewport.height * devicePixelRatio);
+              canvas.style.width = `${{viewport.width}}px`;
+              canvas.style.height = `${{viewport.height}}px`;
+
+              context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+              await page.render({{ canvasContext: context, viewport }}).promise;
+
+              statusEl.textContent = `Σελίδα ${{pageNumber}} από ${{pdf.numPages}}`;
+              prevBtn.disabled = pageNumber <= 1;
+              nextBtn.disabled = pageNumber >= pdf.numPages;
+            }}
+
+            prevBtn.addEventListener("click", async () => {{
+              if (currentPage <= 1) return;
+              currentPage -= 1;
+              await renderPage(currentPage);
+            }});
+
+            nextBtn.addEventListener("click", async () => {{
+              if (currentPage >= pdf.numPages) return;
+              currentPage += 1;
+              await renderPage(currentPage);
+            }});
+
+            await renderPage(currentPage);
+          }}
+
+          initPdfViewer().catch((error) => {{
+            console.error(error);
+            statusEl.textContent = "Αποτυχία απόδοσης του PDF.";
+          }});
+        </script>
+        """,
+        height=height,
+    )
+
+
 def render_deliverables_view() -> None:
     st.subheader("Παραδοτέα Έργου")
     st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
@@ -261,7 +394,8 @@ def render_deliverables_view() -> None:
     suffix = selected_file.suffix.lower()
     if suffix == ".pdf":
         if fitz is None:
-            st.warning("Το preview PDF δεν είναι διαθέσιμο σε αυτό το περιβάλλον. Χρησιμοποιήστε τη λήψη αρχείου.")
+            st.caption("Preview PDF μέσω ενσωματωμένου viewer.")
+            _render_pdf_with_pdfjs(file_bytes, selected_file.name)
             return
         try:
             page_count = _pdf_page_count(str(selected_file))
