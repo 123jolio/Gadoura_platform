@@ -148,8 +148,8 @@ CASE_CONFIG = [
     },
     {
         "key":   "cya",
-        "label": "CYA",
-        "label_full": "Cya (Se2WaQ)",
+        "label": "ΜΗ ΒΑΘΜΟΝΟΜΗΜΕΝΕΣ ΔΟΡΥΦΟΡΙΚΕΣ ΕΙΚΟΝΕΣ",
+        "label_full": "Μη βαθμονομημένες δορυφορικές εικόνες",
         "icon":  "🧫",
         "folders": [GADOURA_ROOT / "Cya" / "GeoTIFFs"],
         "has_chl": False,
@@ -296,6 +296,7 @@ html, body, [data-testid="stApp"] {
     padding:.65rem 1rem!important;
     transition:all .2s ease!important;
     line-height:1.35!important;
+    white-space:normal!important;
 }
 [data-testid="stButton"]>button:hover{
     background:#142840!important;

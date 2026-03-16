@@ -148,8 +148,8 @@ CASE_CONFIG = [
     },
     {
         "key":   "cya",
-        "label": "CYA",
-        "label_full": "Cya (Se2WaQ)",
+        "label": "ΜΗ ΒΑΘΜΟΝΟΜΗΜΕΝΕΣ ΔΟΡΥΦΟΡΙΚΕΣ ΕΙΚΟΝΕΣ",
+        "label_full": "Μη βαθμονομημένες δορυφορικές εικόνες",
         "icon":  "🧫",
         "folders": [GADOURA_ROOT / "Cya" / "GeoTIFFs"],
         "has_chl": False,
@@ -217,7 +217,7 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 
 .slabel{font-family:var(--fh);font-size:.6rem;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:.75rem;padding-left:.15rem;}
 
-[data-testid="stButton"]>button{background:var(--sf)!important;border:1px solid var(--bdr)!important;color:var(--mid)!important;border-radius:12px!important;font-family:var(--fh)!important;font-size:.75rem!important;font-weight:600!important;padding:.7rem 1rem!important;transition:all .18s ease!important;}
+[data-testid="stButton"]>button{background:var(--sf)!important;border:1px solid var(--bdr)!important;color:var(--mid)!important;border-radius:12px!important;font-family:var(--fh)!important;font-size:.75rem!important;font-weight:600!important;padding:.7rem 1rem!important;transition:all .18s ease!important;white-space:normal!important;line-height:1.18!important;}
 [data-testid="stButton"]>button:hover{background:var(--sf2)!important;border-color:rgba(6,214,240,.5)!important;color:var(--tx)!important;transform:translateY(-1px)!important;box-shadow:0 6px 22px rgba(0,0,0,.45)!important;}
 [data-testid="stButton"]>button[kind="primary"]{background:linear-gradient(135deg,#073d60,#052e4a)!important;border-color:var(--ac)!important;color:#e0f8ff!important;box-shadow:0 0 24px rgba(6,214,240,.18)!important;}
 
