@@ -3901,12 +3901,27 @@ with tab_report:
             ),
             secondary_y=True,
         )
-        fig_temp.add_vline(
-            x=pd.Timestamp("2025-12-10"),
-            line_dash="dash",
-            line_color="#22c55e",
-            annotation_text="Χειμερινή κυκλοφορία",
-            annotation_position="top left",
+        # Plotly can raise TypeError with pandas Timestamp in add_vline(annotation).
+        cycle_x = "2025-12-10"
+        fig_temp.add_shape(
+            type="line",
+            x0=cycle_x,
+            x1=cycle_x,
+            y0=0,
+            y1=1,
+            xref="x",
+            yref="paper",
+            line=dict(color="#22c55e", dash="dash"),
+        )
+        fig_temp.add_annotation(
+            x=cycle_x,
+            y=1,
+            xref="x",
+            yref="paper",
+            text="Χειμερινή κυκλοφορία",
+            showarrow=False,
+            yshift=10,
+            font=dict(color="#22c55e"),
         )
         fig_temp.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
         fig_temp.update_yaxes(title_text="Θερμοκρασία (°C)", secondary_y=False)
