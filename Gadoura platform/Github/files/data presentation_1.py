@@ -121,17 +121,52 @@ if not SHARED_DATA_ROOT.exists():
     if legacy_data_root.exists():
         SHARED_DATA_ROOT = legacy_data_root
 
+
+def _image_path_to_data_uri(path: Optional[Path]) -> Optional[str]:
+    if path is None or not path.exists() or not path.is_file():
+        return None
+    mime = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".svg": "image/svg+xml",
+    }.get(path.suffix.lower())
+    if not mime:
+        return None
+    return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+
 APP_HEADER_TITLE = "Εφαρμογή Ανάλυσης Ποιότητας Επιφανειακών Υδάτων για τον Ταμιευτήρα Γαδουρά ΕΥΑΘ ΑΕ"
 APP_HEADER_SUBTITLE = "Οπτικοποίηση δορυφορικών GeoTIFF και επικυρωμένων μετρήσεων"
 APP_LOGO_URL = "https://chatbot.eyath.gr/_astro/eyath-logo-2.DriaSExn_1jOI34.svg"
+APP_SECONDARY_LOGO_PATH = next(
+    (
+        path
+        for path in [
+            APP_DIR / "logo.jpg",
+            PLATFORM_ROOT / "logo.jpg",
+            PLATFORM_ROOT.parent / "logo.jpg",
+        ]
+        if path.exists()
+    ),
+    None,
+)
+APP_SECONDARY_LOGO_URI = _image_path_to_data_uri(APP_SECONDARY_LOGO_PATH)
 
 
 def render_main_header() -> None:
+    secondary_logo_html = (
+        f'<img src="{APP_SECONDARY_LOGO_URI}" class="hcard-logo hcard-logo-secondary" alt="ΕΥΑΘ Υπηρεσίες" />'
+        if APP_SECONDARY_LOGO_URI
+        else ""
+    )
     st.markdown(
         f"""<div class="hcard">
-              <img src="{APP_LOGO_URL}" style="height:60px;object-fit:contain;flex-shrink:0;"
-                   onerror="this.style.display='none'" />
-              <div>
+              <div class="hcard-logos">
+                <img src="{APP_LOGO_URL}" class="hcard-logo hcard-logo-primary"
+                     alt="ΕΥΑΘ" onerror="this.style.display='none'" />
+                {secondary_logo_html}
+              </div>
+              <div class="hcard-copy">
                 <h1>{APP_HEADER_TITLE}</h1>
                 <div class="sub">{APP_HEADER_SUBTITLE}</div>
                 <span class="badge">💧 Gadouras Reservoir · Rhodes, GR</span>
@@ -174,7 +209,7 @@ def _read_binary_file(path: str) -> bytes:
     return Path(path).read_bytes()
 
 
-def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 960) -> None:
+def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 1120) -> None:
     pdf_b64 = base64.b64encode(file_bytes).decode("ascii")
     safe_name = json.dumps(file_name, ensure_ascii=False)
     viewer_html = f"""
@@ -297,7 +332,10 @@ def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 960)
         pdfDoc.getPage(num).then((page) => {{
           const baseViewport = page.getViewport({{ scale: 1 }});
           const availableWidth = Math.max(viewerEl.clientWidth - 32, 320);
-          const scale = availableWidth / baseViewport.width;
+          const availableHeight = Math.max(viewerEl.clientHeight - 28, 320);
+          const widthScale = availableWidth / baseViewport.width;
+          const heightScale = availableHeight / baseViewport.height;
+          const scale = Math.max(0.2, Math.min(widthScale, heightScale));
           const viewport = page.getViewport({{ scale }});
           canvas.width = viewport.width;
           canvas.height = viewport.height;
@@ -985,6 +1023,11 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 
 .hcard{background:linear-gradient(140deg,#091726 0%,#0d2340 55%,#071520 100%);border:1px solid var(--abdr);border-top:2px solid rgba(6,214,240,.55);border-radius:var(--r);padding:1.6rem 2.5rem;margin-bottom:2rem;display:flex;align-items:center;gap:2.4rem;box-shadow:var(--sh),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden;}
 .hcard::before{content:'';position:absolute;top:-80px;right:-80px;width:260px;height:260px;background:radial-gradient(circle,rgba(6,214,240,.08) 0%,transparent 70%);pointer-events:none;}
+.hcard-logos{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:relative;z-index:1;}
+.hcard-logo{object-fit:contain;flex-shrink:0;display:block;}
+.hcard-logo-primary{height:60px;}
+.hcard-logo-secondary{height:48px;padding:.35rem .65rem;border-radius:12px;background:rgba(255,255,255,.96);border:1px solid rgba(15,23,42,.08);}
+.hcard-copy{position:relative;z-index:1;}
 .hcard h1{font-family:var(--fh)!important;font-size:1.45rem!important;font-weight:700!important;color:#f0faff!important;margin:0 0 .35rem 0!important;line-height:1.3!important;letter-spacing:-.02em!important;}
 .hcard .sub{font-size:.72rem;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
 .badge{display:inline-flex;align-items:center;gap:.4rem;background:var(--acd);border:1px solid var(--abdr);color:var(--ac);border-radius:99px;padding:.22rem .9rem;font-family:var(--fh);font-size:.65rem;font-weight:600;letter-spacing:.05em;margin-top:.5rem;}
