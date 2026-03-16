@@ -683,6 +683,149 @@ def _draw_pdf_table_page(pdf, title: str, df: pd.DataFrame, max_rows: int = 30) 
     plt.close(fig)
 
 
+def _plotly_figure_to_png_fallback(fig_obj: go.Figure, fig_title: str) -> bytes:
+    import matplotlib.dates as mdates
+    import matplotlib.pyplot as plt
+
+    def _normalize_xy(x_raw, y_raw):
+        y_vals = list(y_raw) if y_raw is not None else []
+        if not y_vals:
+            return [], [], False
+        x_vals = list(x_raw) if x_raw is not None else list(range(len(y_vals)))
+        n = min(len(x_vals), len(y_vals))
+        x_vals = x_vals[:n]
+        y_vals = y_vals[:n]
+        x_ser = pd.Series(x_vals)
+        y_ser = pd.to_numeric(pd.Series(y_vals), errors="coerce")
+        x_dt = pd.to_datetime(x_ser, errors="coerce")
+        is_datetime = bool(x_dt.notna().sum() >= max(2, int(0.6 * len(x_ser))))
+        if is_datetime:
+            x_ser = x_dt
+        mask = y_ser.notna()
+        if is_datetime:
+            mask = mask & x_ser.notna()
+        return x_ser[mask].tolist(), y_ser[mask].tolist(), is_datetime
+
+    fig, ax = plt.subplots(figsize=(11.2, 6.5), dpi=170)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    ax2 = None
+    drew_any = False
+    heatmap_drawn = False
+    has_datetime_x = False
+
+    for trace in fig_obj.data:
+        try:
+            trace_type = str(getattr(trace, "type", "")).lower()
+            name = str(getattr(trace, "name", "") or trace_type or "series")
+
+            if trace_type in {"heatmap", "image"}:
+                z_raw = getattr(trace, "z", None)
+                if z_raw is None:
+                    continue
+                try:
+                    z = pd.DataFrame(z_raw).apply(pd.to_numeric, errors="coerce").values
+                except Exception:
+                    z = np.array(z_raw, dtype=float)
+                if z.size > 0 and not np.isnan(z).all():
+                    im = ax.imshow(z, aspect="auto", origin="upper", cmap="viridis")
+                    fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
+                    heatmap_drawn = True
+                    drew_any = True
+                continue
+
+            x, y, is_datetime = _normalize_xy(getattr(trace, "x", None), getattr(trace, "y", None))
+            if not y:
+                continue
+            has_datetime_x = has_datetime_x or is_datetime
+
+            y_axis_ref = str(getattr(trace, "yaxis", "y") or "y")
+            use_ax = ax
+            if y_axis_ref == "y2":
+                if ax2 is None:
+                    ax2 = ax.twinx()
+                    ax2.set_facecolor("white")
+                use_ax = ax2
+
+            if trace_type == "bar":
+                opacity = float(getattr(trace, "opacity", 0.75) or 0.75)
+                marker_color = getattr(getattr(trace, "marker", None), "color", None)
+                if isinstance(marker_color, (list, tuple, np.ndarray)):
+                    marker_color = None
+                use_ax.bar(x, y, alpha=opacity, label=name, color=marker_color)
+                drew_any = True
+                continue
+
+            if trace_type.startswith("scatter"):
+                mode = str(getattr(trace, "mode", "lines"))
+                line_obj = getattr(trace, "line", None)
+                marker_obj = getattr(trace, "marker", None)
+                color = getattr(line_obj, "color", None) or getattr(marker_obj, "color", None)
+                if isinstance(color, (list, tuple, np.ndarray)):
+                    color = None
+                dash = str(getattr(line_obj, "dash", "") or "")
+                linestyle = "-"
+                if dash in {"dot", "dash", "dashdot"}:
+                    linestyle = "--"
+                marker = "o" if "markers" in mode else None
+                linewidth = float(getattr(line_obj, "width", 2.0) or 2.0)
+                use_ax.plot(
+                    x,
+                    y,
+                    label=name,
+                    linestyle=linestyle if "lines" in mode or marker is None else "",
+                    marker=marker,
+                    linewidth=linewidth,
+                    markersize=3.5 if marker else 0,
+                    color=color,
+                )
+                drew_any = True
+                continue
+        except Exception:
+            continue
+
+    if not drew_any:
+        ax.text(
+            0.5,
+            0.5,
+            "Δεν ήταν δυνατή η απόδοση του διαγράμματος.",
+            ha="center",
+            va="center",
+            fontsize=12,
+            color="#64748b",
+            transform=ax.transAxes,
+            family="DejaVu Sans",
+        )
+
+    ax.set_title(fig_title, fontsize=13, fontweight="bold", loc="left", color="#0f172a", fontfamily="DejaVu Sans")
+    if has_datetime_x:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m/%Y"))
+    if not heatmap_drawn:
+        ax.grid(True, color="#dbe4ee", linewidth=0.8, alpha=0.95)
+    ax.tick_params(colors="#334155", labelsize=9)
+    for spine in ax.spines.values():
+        spine.set_color("#cbd5e1")
+    if ax2 is not None:
+        ax2.tick_params(colors="#334155", labelsize=9)
+        for spine in ax2.spines.values():
+            spine.set_color("#cbd5e1")
+
+    h1, l1 = ax.get_legend_handles_labels()
+    h2, l2 = (ax2.get_legend_handles_labels() if ax2 is not None else ([], []))
+    if h1 or h2:
+        ax.legend(h1 + h2, l1 + l2, loc="best", fontsize=8, framealpha=0.92)
+
+    try:
+        fig.autofmt_xdate(rotation=25)
+    except Exception:
+        pass
+
+    out = BytesIO()
+    fig.savefig(out, format="png", bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return out.getvalue()
+
+
 def _build_report_tab_pdf_bytes(
     title: str,
     subtitle: str,
@@ -716,21 +859,66 @@ def _build_report_tab_pdf_bytes(
         for table_title, df_tbl in tables:
             _draw_pdf_table_page(pdf, table_title, df_tbl)
 
+        total_figures = len(figures)
+        embedded_figures = 0
+        failed_figures = 0
+
         for fig_title, fig_obj in figures:
+            image = None
             try:
                 img_bytes = fig_obj.to_image(format="png", width=1800, height=1080, scale=2)
                 image = Image.open(BytesIO(img_bytes)).convert("RGB")
             except Exception as exc:
-                notes.append(f"{fig_title}: {exc}")
-                continue
+                try:
+                    fb_bytes = _plotly_figure_to_png_fallback(fig_obj, fig_title)
+                    image = Image.open(BytesIO(fb_bytes)).convert("RGB")
+                    notes.append(f"FALLBACK: {fig_title} ({type(exc).__name__})")
+                except Exception as fb_exc:
+                    notes.append(
+                        f"ERROR: {fig_title} ({type(exc).__name__}: {exc}) | "
+                        f"fallback ({type(fb_exc).__name__}: {fb_exc})"
+                    )
 
             fig_page, ax_page = plt.subplots(figsize=(11.69, 8.27), dpi=140)
             fig_page.patch.set_facecolor("white")
             ax_page.axis("off")
             ax_page.set_title(fig_title, fontsize=13, loc="left", pad=10, color="#0f172a", fontfamily="DejaVu Sans")
-            ax_page.imshow(image)
+            if image is not None:
+                ax_page.imshow(image)
+                embedded_figures += 1
+            else:
+                failed_figures += 1
+                ax_page.text(
+                    0.5,
+                    0.52,
+                    "Αποτυχία απόδοσης διαγράμματος για το PDF.",
+                    ha="center",
+                    va="center",
+                    fontsize=14,
+                    color="#0f172a",
+                    family="DejaVu Sans",
+                    transform=ax_page.transAxes,
+                )
+                ax_page.text(
+                    0.5,
+                    0.44,
+                    "Δείτε τις λεπτομέρειες εξαγωγής στο panel της εφαρμογής.",
+                    ha="center",
+                    va="center",
+                    fontsize=10,
+                    color="#64748b",
+                    family="DejaVu Sans",
+                    transform=ax_page.transAxes,
+                )
             pdf.savefig(fig_page, bbox_inches="tight", facecolor="white")
             plt.close(fig_page)
+
+        if total_figures == 0:
+            notes.insert(0, "SUMMARY: Δεν βρέθηκαν διαγράμματα για εξαγωγή.")
+        else:
+            notes.insert(0, f"SUMMARY: Διαγράμματα στο PDF {embedded_figures}/{total_figures}")
+        if failed_figures:
+            notes.append(f"SUMMARY: Αποτυχίες απόδοσης διαγραμμάτων {failed_figures}")
 
     return pdf_buffer.getvalue(), notes
 
@@ -2776,7 +2964,7 @@ def _run_lake_height_analysis(collection, polygon_geom, method: str, threshold: 
     return pd.DataFrame(rows).dropna(how="all").sort_values("date")
 
 
-tab_level, tab_map, tab_ts, tab_3d, tab_depth, tab_report, tab_compare, tab_raw = st.tabs([
+tab_level, tab_map, tab_ts, tab_3d, tab_depth, tab_report, tab_compare, tab_alarm, tab_raw = st.tabs([
     "Στάθμη",
     "Χάρτης",
     "Χρονοσειρές",
@@ -2784,6 +2972,7 @@ tab_level, tab_map, tab_ts, tab_3d, tab_depth, tab_report, tab_compare, tab_raw 
     "Κατακόρυφα Προφίλ",
     "Επιστημονική Ερμηνεία",
     "Σύγκριση Σημείων",
+    "Alarm Παραμέτρων",
     "Δεδομένα",
 ])
 # ══════════════════════════════════════════════════════════════
@@ -3169,11 +3358,12 @@ with tab_ts:
     st.subheader("Χρονοσειρές Παραμέτρων")
     
     col_a, col_b, col_c = st.columns([2, 2, 2])
+    ts_available_params = [p for p in COL_MAP if df[p].notna().any()]
     
     with col_a:
         param = st.selectbox(
-            "Παράμετρος",
-            options=[p for p in COL_MAP if df[p].notna().any()],
+            "Κύρια Παράμετρος",
+            options=ts_available_params,
             key="ts_param"
         )
     
@@ -3194,6 +3384,17 @@ with tab_ts:
             options=["Όλα"] + all_depths,
             key="ts_depth"
         )
+    ts_column_params = st.multiselect(
+        "Παράμετροι ανά στήλη (έως 6)",
+        options=ts_available_params,
+        default=[param],
+        key="ts_params_per_column",
+    )
+    if param not in ts_column_params:
+        ts_column_params = [param] + ts_column_params
+    if len(ts_column_params) > 6:
+        st.warning("Μέγιστο 6 παράμετροι ανά προβολή. Εμφανίζονται οι πρώτες 6.")
+        ts_column_params = ts_column_params[:6]
     
     if not sel_points:
         st.warning("Επιλέξτε τουλάχιστον ένα σημείο.")
@@ -3201,6 +3402,62 @@ with tab_ts:
         filt = df[df["point"].isin(sel_points)].copy()
         if sel_depth != "Όλα":
             filt = filt[filt["depth"] == sel_depth]
+
+        if ts_column_params:
+            st.markdown("#### Πολλαπλές Παράμετροι (ανά στήλη)")
+            for start_idx in range(0, len(ts_column_params), 3):
+                row_params = ts_column_params[start_idx:start_idx + 3]
+                row_cols = st.columns(len(row_params))
+                for i, p_col in enumerate(row_params):
+                    grp_col = filt.groupby(["date", "point"])[p_col].mean().reset_index()
+                    grp_col_nonnull = grp_col.dropna(subset=[p_col])
+                    with row_cols[i]:
+                        if grp_col_nonnull.empty:
+                            st.info(f"Δεν υπάρχουν δεδομένα για {p_col}.")
+                            continue
+                        fig_col = go.Figure()
+                        for idx, pt in enumerate(sel_points):
+                            sub_col = grp_col_nonnull[grp_col_nonnull["point"] == pt].sort_values("date")
+                            if sub_col.empty:
+                                continue
+                            clr = _PLT_SERIES[idx % len(_PLT_SERIES)]
+                            fig_col.add_trace(
+                                go.Scatter(
+                                    x=sub_col["date"],
+                                    y=sub_col[p_col],
+                                    mode="lines+markers",
+                                    name=f"Σ{pt}",
+                                    line=dict(color=clr, width=2),
+                                    marker=dict(size=6, color=clr, line=dict(width=1, color=_PLT_MARKER_BORDER)),
+                                    hovertemplate=f"<b>Σημείο {pt}</b><br>Ημ/νία: %{{x|%d/%m/%Y}}<br>{p_col}: %{{y:.3f}}<extra></extra>",
+                                )
+                            )
+                        fig_col.update_layout(
+                            title=dict(text=f"<b>{p_col}</b>", font=dict(size=13)),
+                            xaxis=dict(title="Ημερομηνία", tickformat="%d/%m/%Y", tickangle=-25),
+                            yaxis=dict(title=p_col),
+                            height=320,
+                            margin=dict(t=48, b=42, l=45, r=15),
+                            legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0, font=dict(size=10)),
+                            plot_bgcolor=_PLT_BG,
+                            paper_bgcolor=_PLT_PAPER,
+                            font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                        )
+                        fig_col.update_xaxes(
+                            showgrid=True,
+                            gridcolor=_PLT_GRID,
+                            linecolor=_PLT_LINE,
+                            tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                            title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                        )
+                        fig_col.update_yaxes(
+                            showgrid=True,
+                            gridcolor=_PLT_GRID,
+                            linecolor=_PLT_LINE,
+                            tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                            title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                        )
+                        st.plotly_chart(fig_col, use_container_width=True, theme=None)
         
         # Aggregate (mean per date/point when multiple depths)
         grp = filt.groupby(["date", "point"])[param].mean().reset_index()
@@ -4629,11 +4886,19 @@ with tab_report:
                 use_container_width=True,
                 key="report_tab_pdf_download",
             )
-    if st.session_state.get("report_tab_pdf_notes"):
-        st.info(
-            "Κάποια διαγράμματα δεν ενσωματώθηκαν στο PDF. "
-            "Αν χρειάζεται πλήρης εξαγωγή plots, πρόσθεσε το πακέτο `kaleido` στο περιβάλλον."
-        )
+    pdf_notes = st.session_state.get("report_tab_pdf_notes", [])
+    if pdf_notes:
+        has_errors = any(str(n).startswith("ERROR:") for n in pdf_notes)
+        has_fallbacks = any(str(n).startswith("FALLBACK:") for n in pdf_notes)
+        if has_errors:
+            st.warning("Η εξαγωγή PDF ολοκληρώθηκε με σφάλματα σε ορισμένα διαγράμματα.")
+        elif has_fallbacks:
+            st.info("Η εξαγωγή PDF ολοκληρώθηκε με fallback renderer για κάποια διαγράμματα.")
+        else:
+            st.success("Η εξαγωγή PDF ολοκληρώθηκε επιτυχώς.")
+        with st.expander("Λεπτομέρειες εξαγωγής PDF", expanded=False):
+            for note in pdf_notes:
+                st.write(f"- {note}")
 
 # ══════════════════════════════════════════════════════════════
 # TAB 4: COMPARE POINTS
@@ -4755,6 +5020,182 @@ with tab_compare:
                 title=f"Κανονικοποιημένο Ραδιογράφημα — {cmp_date.strftime('%d/%m/%Y')}"
             )
             st.plotly_chart(fig_r, use_container_width=True, theme=None)
+
+# ══════════════════════════════════════════════════════════════
+# TAB 8: ALARM PARAMETERS
+# ══════════════════════════════════════════════════════════════
+with tab_alarm:
+    st.subheader("Alarm Παραμέτρων (Μετρήσεις Πεδίου)")
+    st.caption("Έλεγχος υπερβάσεων/υποβάσεων ορίων ανά παράμετρο, σημείο και βάθος.")
+
+    alarm_available_params = [p for p in COL_MAP if df[p].notna().any()]
+    alarm_default_rules = {
+        "Θερμοκρασία (°C)": (">", 25.0),
+        "Διαλυμένο Οξυγόνο DO (mg/L)": ("<", 2.0),
+        "pH": (">", 8.5),
+        "Αγωγιμότητα (μS/cm)": (">", 650.0),
+        "Χλωροφύλλη-α (μg/L)": (">", 15.0),
+        "TOC (mg/L)": (">", 5.0),
+        "Mn²⁺ (mg/L)": (">", 0.05),
+        "NH4⁺ (mg/L)": (">", 0.2),
+        "Θολότητα-Εργαστήριο (NTU)": (">", 10.0),
+        "Θολότητα-Πεδίο (NTU)": (">", 10.0),
+    }
+
+    ac1, ac2 = st.columns(2)
+    with ac1:
+        alarm_date_filter = st.multiselect(
+            "Ημερομηνίες",
+            options=dates,
+            default=dates,
+            format_func=lambda d: d.strftime("%d/%m/%Y"),
+            key="alarm_dates",
+        )
+    with ac2:
+        alarm_point_filter = st.multiselect(
+            "Σημεία",
+            options=sorted(df["point"].unique()),
+            default=sorted(df["point"].unique()),
+            format_func=lambda x: f"Σημείο {x}",
+            key="alarm_points",
+        )
+
+    selected_alarm_params = st.multiselect(
+        "Παράμετροι για έλεγχο alarm",
+        options=alarm_available_params,
+        default=[p for p in ["Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)", "pH", "Θερμοκρασία (°C)"] if p in alarm_available_params],
+        key="alarm_params_selected",
+    )
+
+    if not alarm_date_filter or not alarm_point_filter:
+        st.info("Επίλεξε τουλάχιστον μία ημερομηνία και ένα σημείο.")
+    elif not selected_alarm_params:
+        st.info("Επίλεξε τουλάχιστον μία παράμετρο για έλεγχο.")
+    else:
+        st.markdown("#### Όρια Alarm ανά Παράμετρο")
+        alarm_rules = {}
+        for p in selected_alarm_params:
+            safe_key = re.sub(r"[^0-9a-zA-Z_]+", "_", p)
+            default_mode, default_thr = alarm_default_rules.get(p, (">", 0.0))
+            rc1, rc2, rc3 = st.columns([2.3, 1.3, 1.1])
+            with rc1:
+                mode = st.selectbox(
+                    f"{p} — Συνθήκη",
+                    options=[">", "<"],
+                    index=0 if default_mode == ">" else 1,
+                    key=f"alarm_mode_{safe_key}",
+                )
+            with rc2:
+                threshold = st.number_input(
+                    f"{p} — Όριο",
+                    value=float(default_thr),
+                    step=0.01,
+                    format="%.3f",
+                    key=f"alarm_threshold_{safe_key}",
+                )
+            with rc3:
+                enabled = st.checkbox("Ενεργό", value=True, key=f"alarm_enabled_{safe_key}")
+            if enabled:
+                alarm_rules[p] = (mode, float(threshold))
+
+        alarm_src = df[df["date"].isin(alarm_date_filter) & df["point"].isin(alarm_point_filter)].copy()
+        alarm_rows = []
+        for p, (mode, threshold) in alarm_rules.items():
+            if p not in alarm_src.columns:
+                continue
+            values = pd.to_numeric(alarm_src[p], errors="coerce")
+            if mode == ">":
+                mask = values > threshold
+                delta = values - threshold
+            else:
+                mask = values < threshold
+                delta = threshold - values
+
+            if mask.any():
+                part = alarm_src.loc[mask, ["date", "point", "depth", p]].copy()
+                part = part.rename(columns={p: "Τιμή"})
+                part["Παράμετρος"] = p
+                part["Συνθήκη"] = f"{mode} {threshold:.3f}"
+                part["Απόκλιση"] = delta.loc[mask]
+                alarm_rows.append(part)
+
+        if not alarm_rows:
+            st.success("Δεν βρέθηκαν alarm για τα τρέχοντα όρια.")
+        else:
+            alarms_df = pd.concat(alarm_rows, ignore_index=True)
+            alarms_df["date"] = pd.to_datetime(alarms_df["date"], errors="coerce")
+            alarms_df = alarms_df.sort_values(["date", "Παράμετρος", "point", "depth"], ascending=[False, True, True, True])
+            alarms_df["Ημερομηνία"] = alarms_df["date"].dt.strftime("%d/%m/%Y")
+            alarms_df["Τιμή"] = pd.to_numeric(alarms_df["Τιμή"], errors="coerce")
+            alarms_df["Απόκλιση"] = pd.to_numeric(alarms_df["Απόκλιση"], errors="coerce")
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Σύνολο Alarm", f"{len(alarms_df)}")
+            m2.metric("Παράμετροι με Alarm", f"{alarms_df['Παράμετρος'].nunique()}")
+            m3.metric("Ημερομηνίες με Alarm", f"{alarms_df['date'].nunique()}")
+            last_alarm_date = alarms_df["date"].max()
+            m4.metric("Τελευταίο Alarm", last_alarm_date.strftime("%d/%m/%Y") if pd.notna(last_alarm_date) else "—")
+
+            summary_alarm = (
+                alarms_df.groupby("Παράμετρος")
+                .agg(
+                    Συναγερμοί=("Τιμή", "count"),
+                    Μέση_Τιμή=("Τιμή", "mean"),
+                    Μέγιστη_Απόκλιση=("Απόκλιση", "max"),
+                )
+                .reset_index()
+                .sort_values("Συναγερμοί", ascending=False)
+            )
+            summary_alarm = summary_alarm.rename(columns={"Μέση_Τιμή": "Μέση Τιμή", "Μέγιστη_Απόκλιση": "Μέγιστη Απόκλιση"})
+
+            st.markdown("#### Σύνοψη Alarm ανά Παράμετρο")
+            st.dataframe(summary_alarm, use_container_width=True, hide_index=True)
+
+            fig_alarm = px.bar(
+                summary_alarm,
+                x="Παράμετρος",
+                y="Συναγερμοί",
+                color="Συναγερμοί",
+                color_continuous_scale="Reds",
+                text_auto=True,
+                height=360,
+                title="Πλήθος Alarm ανά Παράμετρο",
+            )
+            fig_alarm.update_layout(
+                plot_bgcolor=_PLT_BG,
+                paper_bgcolor=_PLT_PAPER,
+                font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+            )
+            fig_alarm.update_xaxes(
+                showgrid=False,
+                linecolor=_PLT_LINE,
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+            )
+            fig_alarm.update_yaxes(
+                showgrid=True,
+                gridcolor=_PLT_GRID,
+                linecolor=_PLT_LINE,
+                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+            )
+            st.plotly_chart(fig_alarm, use_container_width=True, theme=None)
+
+            st.markdown("#### Αναλυτικός Πίνακας Alarm")
+            alarms_view = alarms_df.rename(columns={"point": "Σημείο", "depth": "Βάθος"})[
+                ["Ημερομηνία", "Σημείο", "Βάθος", "Παράμετρος", "Τιμή", "Συνθήκη", "Απόκλιση"]
+            ]
+            st.dataframe(alarms_view, use_container_width=True, hide_index=True, height=430)
+
+            csv_alarm = alarms_view.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "⬇️ Λήψη Alarm CSV",
+                data=csv_alarm,
+                file_name=f"field_measurement_alarms_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="alarms_csv_download",
+            )
 
 # ══════════════════════════════════════════════════════════════
 # TAB 5: RAW DATA
