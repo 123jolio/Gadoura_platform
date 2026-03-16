@@ -376,6 +376,78 @@ def _render_pdf_preview(file_bytes: bytes, file_name: str, *, height: int = 960)
     components.html(viewer_html, height=height, scrolling=False)
 
 
+@st.cache_data(show_spinner=False)
+def _dataframe_to_png_bytes(df: pd.DataFrame, title: str = "") -> bytes:
+    import matplotlib.pyplot as plt
+
+    export_df = df.copy()
+    if export_df.empty:
+        export_df = pd.DataFrame({"Μήνυμα": ["Δεν υπάρχουν δεδομένα για τα τρέχοντα φίλτρα."]})
+
+    display_df = export_df.copy()
+    for col in display_df.columns:
+        if pd.api.types.is_float_dtype(display_df[col]):
+            display_df[col] = display_df[col].map(
+                lambda x: "" if pd.isna(x) else f"{x:.3f}".rstrip("0").rstrip(".")
+            )
+        else:
+            display_df[col] = display_df[col].map(lambda x: "" if pd.isna(x) else str(x))
+
+    headers = [str(col) for col in display_df.columns]
+    rows = display_df.values.tolist()
+    max_lengths = []
+    for idx, header in enumerate(headers):
+        lengths = [len(header)]
+        lengths.extend(len(str(row[idx])) for row in rows)
+        max_lengths.append(max(lengths))
+
+    col_widths = [min(5.4, max(1.4, length * 0.115)) for length in max_lengths]
+    total_width = sum(col_widths)
+    fig_width = total_width + 0.8
+    fig_height = max(2.2, 0.34 * (len(rows) + 1) + (0.55 if title else 0.2))
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=180)
+    fig.patch.set_facecolor("white")
+    ax.axis("off")
+
+    if title:
+        ax.set_title(title, fontsize=12, fontweight="bold", loc="left", pad=10, fontfamily="DejaVu Sans")
+
+    table_bbox = [0, 0, 1, 0.94] if title else [0, 0, 1, 1]
+    table = ax.table(
+        cellText=rows,
+        colLabels=headers,
+        loc="upper left",
+        cellLoc="left",
+        colLoc="left",
+        bbox=table_bbox,
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(8.5 if len(headers) <= 8 else 7.5)
+
+    for col_idx, width in enumerate(col_widths):
+        width_ratio = width / total_width
+        for row_idx in range(len(rows) + 1):
+            cell = table[(row_idx, col_idx)]
+            cell.set_width(width_ratio)
+            cell.set_edgecolor("#cbd5e1")
+            cell.set_linewidth(0.8)
+            cell.PAD = 0.03
+            cell.get_text().set_fontfamily("DejaVu Sans")
+            if row_idx == 0:
+                cell.set_facecolor("#0f172a")
+                cell.get_text().set_color("white")
+                cell.get_text().set_weight("bold")
+            else:
+                cell.set_facecolor("#f8fafc" if row_idx % 2 else "#eef4fb")
+                cell.get_text().set_color("#0f172a")
+
+    buffer = BytesIO()
+    fig.savefig(buffer, format="png", bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return buffer.getvalue()
+
+
 def render_deliverables_view() -> None:
     st.subheader("Παραδοτέα Έργου")
     st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
@@ -3285,11 +3357,17 @@ with tab_raw:
     filt_raw = df[df["point"].isin(filter_points) & df["date"].isin(filter_dates)].copy()
     filt_raw["date"] = filt_raw["date"].dt.strftime("%d/%m/%Y")
     filt_raw = filt_raw.rename(columns={"date": "Ημερομηνία", "point": "Σημείο", "depth": "Βάθος"})
-    
-    st.dataframe(filt_raw.reset_index(drop=True), use_container_width=True, height=400)
-    
-    csv = filt_raw.to_csv(index=False).encode("utf-8-sig")
-    st.download_button("⬇️ Λήψη CSV", data=csv, file_name="monitoring_data.csv", mime="text/csv")
+
+    raw_table_view = filt_raw.reset_index(drop=True)
+    st.dataframe(raw_table_view, use_container_width=True, height=400)
+
+    csv = raw_table_view.to_csv(index=False).encode("utf-8-sig")
+    png = _dataframe_to_png_bytes(raw_table_view, "Ακατέργαστα Δεδομένα")
+    export_col_csv, export_col_png = st.columns(2)
+    with export_col_csv:
+        st.download_button("⬇️ Λήψη CSV", data=csv, file_name="monitoring_data.csv", mime="text/csv", use_container_width=True)
+    with export_col_png:
+        st.download_button("🖼️ Λήψη PNG", data=png, file_name="monitoring_data.png", mime="image/png", use_container_width=True)
 
 st.markdown("---")
 st.caption("ΕΥΑΘ · Δορυφορική Παρακολούθηση Φράγματος Γαδουρά · 2025-2026")
