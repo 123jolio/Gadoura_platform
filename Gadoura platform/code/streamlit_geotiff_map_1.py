@@ -192,10 +192,10 @@ CASE_DISPLAY_ORDER = [
     "level",
     "pragmatiki",
     "chlorophyll_validated",
-    "uncalibrated_satellite",
     "tholotita",
     "burned_areas",
     "bgr",
+    "uncalibrated_satellite",
 ]
 
 
