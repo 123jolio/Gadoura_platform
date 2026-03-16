@@ -2791,8 +2791,8 @@ with tab_depth:
                     if len(fig_p.data) == 0:
                         continue
                     fig_p.update_layout(
-                        title=dict(text=f"<b>{param}</b>", font=dict(size=13)),
-                        xaxis=dict(title=param, side="top"),
+                        title=dict(text=f"<b>{param}</b>", font=dict(size=13), x=0.5),
+                        xaxis=dict(side="bottom"),
                         yaxis=dict(title="Βάθος (m)", autorange="reversed"),
                         height=400,
                         plot_bgcolor=_PLT_BG,
@@ -2808,9 +2808,11 @@ with tab_depth:
                             bordercolor="rgba(6,214,240,.2)",
                             borderwidth=1
                         ),
-                        margin=dict(t=60, b=20, l=60, r=20)
+                        margin=dict(t=60, b=44, l=60, r=20)
                     )
                     fig_p.update_xaxes(
+                        title_text=None,
+                        side="bottom",
                         showgrid=True,
                         gridcolor=_PLT_GRID,
                         linecolor=_PLT_LINE,
