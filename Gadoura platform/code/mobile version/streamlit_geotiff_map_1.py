@@ -8,6 +8,7 @@ separate reservoir-level panel.
 
 from __future__ import annotations
 
+import base64
 from datetime import date
 from pathlib import Path
 import re
@@ -101,6 +102,12 @@ TURBIDITY_SCALE_IMAGE = _resolve_turbidity_scale_image()
 
 
 # ── Case configuration ─────────────────────────────────────────────────────────
+def _image_data_uri(path: Path) -> str:
+    suffix = path.suffix.lower()
+    mime = "image/png" if suffix == ".png" else "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+
+
 CASE_CONFIG = [
     {
         "key":   "level",
@@ -140,6 +147,14 @@ CASE_CONFIG = [
         "has_chl": True,
     },
     {
+        "key":   "cya",
+        "label": "CYA",
+        "label_full": "Cya (Se2WaQ)",
+        "icon":  "🧫",
+        "folders": [GADOURA_ROOT / "Cya" / "GeoTIFFs"],
+        "has_chl": False,
+    },
+    {
         "key":   "tholotita",
         "label": "Θολότητα",
         "icon":  "💧",
@@ -163,6 +178,7 @@ CASE_DISPLAY_ORDER = [
     "level",
     "pragmatiki",
     "chlorophyll_validated",
+    "cya",
     "tholotita",
     "burned_areas",
     "bgr",
@@ -211,7 +227,10 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 [data-baseweb="slider"] [role="slider"]{background:var(--ac)!important;box-shadow:0 0 0 3px rgba(6,214,240,.2)!important;}
 [data-baseweb="slider"]>div>div>div:first-child{background:var(--ac)!important;}
 
-.mapwrap{border:1px solid var(--abdr);border-top:2px solid rgba(6,214,240,.5);border-radius:var(--r);overflow:hidden;box-shadow:0 18px 70px rgba(0,0,0,.78),inset 0 1px 0 rgba(255,255,255,.03);margin-bottom:1.8rem;}
+.mapwrap{position:relative;border:1px solid var(--abdr);border-top:2px solid rgba(6,214,240,.5);border-radius:var(--r);overflow:hidden;box-shadow:0 18px 70px rgba(0,0,0,.78),inset 0 1px 0 rgba(255,255,255,.03);margin-bottom:1.8rem;}
+.turbidity-corner{position:absolute;left:12px;bottom:12px;z-index:999;width:min(180px,34vw);padding:.35rem .4rem .4rem;background:rgba(8,17,31,.88);border:1px solid rgba(56,189,248,.16);border-radius:10px;backdrop-filter:blur(8px);box-shadow:0 8px 24px rgba(0,0,0,.35);}
+.turbidity-corner-label{font-size:.46rem;letter-spacing:.12em;text-transform:uppercase;color:#9acbe2;margin-bottom:.25rem;font-weight:700;}
+.turbidity-corner img{display:block;width:100%;height:auto;border-radius:6px;background:#fff;}
 
 .sstrip{display:flex;align-items:center;gap:.75rem;margin:.3rem 0 1.1rem;font-size:.77rem;color:var(--mid);font-family:var(--fb);background:var(--acd);border:1px solid var(--bdr);border-radius:10px;padding:.5rem 1rem;}
 .sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--ac);box-shadow:0 0 10px var(--ac);animation:_pulse 2.5s ease-in-out infinite;}
@@ -320,6 +339,16 @@ hr{border-color:var(--bdr)!important;}
 
   /* ── Map — full width, reasonable height ──────────────────── */
   .mapwrap { border-radius: 12px !important; }
+  .turbidity-corner {
+    left: 10px !important;
+    bottom: 10px !important;
+    width: min(150px, 42vw) !important;
+    padding: .32rem .36rem .36rem !important;
+  }
+  .turbidity-corner-label {
+    font-size: .42rem !important;
+    margin-bottom: .2rem !important;
+  }
   [data-testid="stIFrame"] { min-height: 340px !important; }
   iframe { min-height: 340px !important; }
 
@@ -1203,11 +1232,23 @@ def render_satellite_dashboard(
             ).add_to(fmap)
     folium.LayerControl(position="bottomright").add_to(fmap)
 
+    turbidity_scale_uri = None
+    if cfg.get("has_turbidity", False) and TURBIDITY_SCALE_IMAGE.exists():
+        turbidity_scale_uri = _image_data_uri(TURBIDITY_SCALE_IMAGE)
+
     st.markdown("<div class='mapwrap'>", unsafe_allow_html=True)
     st_folium(fmap, width=None, height=680, returned_objects=[])
+    if turbidity_scale_uri:
+        st.markdown(
+            f"""<div class="turbidity-corner">
+                  <div class="turbidity-corner-label">Κλίμακα Θολότητας</div>
+                  <img src="{turbidity_scale_uri}" alt="Κλίμακα τιμών θολότητας" />
+                </div>""",
+            unsafe_allow_html=True,
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    if cfg.get("has_turbidity", False) and TURBIDITY_SCALE_IMAGE.exists():
+    if False and cfg.get("has_turbidity", False) and TURBIDITY_SCALE_IMAGE.exists():
         st.markdown("<div class='slabel'>Κλίμακα Θολότητας</div>", unsafe_allow_html=True)
         st.image(str(TURBIDITY_SCALE_IMAGE), caption="Κλίμακα τιμών θολότητας", use_container_width=True)
 

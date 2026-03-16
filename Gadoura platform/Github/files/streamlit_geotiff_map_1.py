@@ -8,6 +8,7 @@ separate reservoir-level panel.
 
 from __future__ import annotations
 
+import base64
 from datetime import date
 from pathlib import Path
 import re
@@ -100,6 +101,12 @@ def _resolve_turbidity_scale_image() -> Path:
 TURBIDITY_SCALE_IMAGE = _resolve_turbidity_scale_image()
 
 
+def _image_data_uri(path: Path) -> str:
+    suffix = path.suffix.lower()
+    mime = "image/png" if suffix == ".png" else "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+
+
 # ── Case configuration ─────────────────────────────────────────────────────────
 CASE_CONFIG = [
     {
@@ -140,6 +147,14 @@ CASE_CONFIG = [
         "has_chl": True,
     },
     {
+        "key":   "cya",
+        "label": "CYA",
+        "label_full": "Cya (Se2WaQ)",
+        "icon":  "🧫",
+        "folders": [GADOURA_ROOT / "Cya" / "GeoTIFFs"],
+        "has_chl": False,
+    },
+    {
         "key":   "tholotita",
         "label": "Θολότητα",
         "icon":  "💧",
@@ -163,6 +178,7 @@ CASE_DISPLAY_ORDER = [
     "level",
     "pragmatiki",
     "chlorophyll_validated",
+    "cya",
     "tholotita",
     "burned_areas",
     "bgr",
@@ -314,12 +330,41 @@ html, body, [data-testid="stApp"] {
 
 /* ─── Map wrapper ─────────────────────────────────────────────────── */
 .mapwrap{
+    position:relative;
     border:1px solid rgba(56,189,248,.22);
     border-top:2px solid rgba(56,189,248,.4);
     border-radius:18px;
     overflow:hidden;
     box-shadow:0 12px 60px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.04);
     margin-bottom:1.6rem;
+}
+.turbidity-corner{
+    position:absolute;
+    left:14px;
+    bottom:14px;
+    z-index:999;
+    width:min(200px,20vw);
+    padding:.38rem .42rem .42rem;
+    background:rgba(8,17,31,.88);
+    border:1px solid rgba(56,189,248,.16);
+    border-radius:10px;
+    backdrop-filter:blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,.35);
+}
+.turbidity-corner-label{
+    font-size:.46rem;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:#9acbe2;
+    margin-bottom:.25rem;
+    font-weight:700;
+}
+.turbidity-corner img{
+    display:block;
+    width:100%;
+    height:auto;
+    border-radius:6px;
+    background:#fff;
 }
 
 /* ─── Status strip ────────────────────────────────────────────────── */
@@ -1229,13 +1274,21 @@ def render_satellite_dashboard(
             ).add_to(fmap)
     folium.LayerControl(position="bottomright").add_to(fmap)
 
+    turbidity_scale_uri = None
+    if cfg.get("has_turbidity", False) and TURBIDITY_SCALE_IMAGE.exists():
+        turbidity_scale_uri = _image_data_uri(TURBIDITY_SCALE_IMAGE)
+
     st.markdown("<div class='mapwrap'>", unsafe_allow_html=True)
     st_folium(fmap, width=None, height=680, returned_objects=[])
+    if turbidity_scale_uri:
+        st.markdown(
+            f"""<div class="turbidity-corner">
+                  <div class="turbidity-corner-label">Κλίμακα Θολότητας</div>
+                  <img src="{turbidity_scale_uri}" alt="Κλίμακα τιμών θολότητας" />
+                </div>""",
+            unsafe_allow_html=True,
+        )
     st.markdown("</div>", unsafe_allow_html=True)
-
-    if cfg.get("has_turbidity", False) and TURBIDITY_SCALE_IMAGE.exists():
-        st.markdown("<div class='slabel'>Κλίμακα Θολότητας</div>", unsafe_allow_html=True)
-        st.image(str(TURBIDITY_SCALE_IMAGE), caption="Κλίμακα τιμών θολότητας", use_container_width=True)
 
     # ── Chlorophyll charts (only for that case, hidden by default) ───────────
     if cfg["has_chl"]:
