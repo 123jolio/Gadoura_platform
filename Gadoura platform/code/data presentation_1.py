@@ -831,6 +831,7 @@ def _build_report_tab_pdf_bytes(
     subtitle: str,
     tables: list[tuple[str, pd.DataFrame]],
     figures: list[tuple[str, go.Figure]],
+    use_fallback_renderer: bool = False,
 ) -> tuple[bytes, list[str]]:
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
@@ -869,14 +870,20 @@ def _build_report_tab_pdf_bytes(
                 img_bytes = fig_obj.to_image(format="png", width=1800, height=1080, scale=2)
                 image = Image.open(BytesIO(img_bytes)).convert("RGB")
             except Exception as exc:
-                try:
-                    fb_bytes = _plotly_figure_to_png_fallback(fig_obj, fig_title)
-                    image = Image.open(BytesIO(fb_bytes)).convert("RGB")
-                    notes.append(f"FALLBACK: {fig_title} ({type(exc).__name__})")
-                except Exception as fb_exc:
+                if use_fallback_renderer:
+                    try:
+                        fb_bytes = _plotly_figure_to_png_fallback(fig_obj, fig_title)
+                        image = Image.open(BytesIO(fb_bytes)).convert("RGB")
+                        notes.append(f"FALLBACK: {fig_title} ({type(exc).__name__})")
+                    except Exception as fb_exc:
+                        notes.append(
+                            f"ERROR: {fig_title} ({type(exc).__name__}: {exc}) | "
+                            f"fallback ({type(fb_exc).__name__}: {fb_exc})"
+                        )
+                else:
                     notes.append(
                         f"ERROR: {fig_title} ({type(exc).__name__}: {exc}) | "
-                        f"fallback ({type(fb_exc).__name__}: {fb_exc})"
+                        "πιστή απόδοση απαιτεί kaleido."
                     )
 
             fig_page, ax_page = plt.subplots(figsize=(11.69, 8.27), dpi=140)
@@ -4864,6 +4871,11 @@ with tab_report:
 
     st.markdown("#### Εξαγωγή Καρτέλας σε PDF")
     st.caption("Δημιουργήστε PDF με τους πίνακες και τα διαγράμματα του tab «Επιστημονική Ερμηνεία».")
+    use_fallback_renderer = st.checkbox(
+        "Χρήση fallback renderer όταν αποτύχει το Plotly export (πιθανή διαφορετική όψη από το tab)",
+        value=False,
+        key="report_tab_pdf_use_fallback_renderer",
+    )
     prep_col, dl_col = st.columns([1, 1.2])
     with prep_col:
         if st.button("📄 Δημιουργία PDF", key="report_tab_pdf_prepare"):
@@ -4873,6 +4885,7 @@ with tab_report:
                     subtitle=f"Ημερομηνίες εκστρατειών: {len(dates)} | Σημεία: {df['point'].nunique()} | Βάθη: {df['depth'].nunique()}",
                     tables=report_pdf_tables,
                     figures=report_pdf_figures,
+                    use_fallback_renderer=use_fallback_renderer,
                 )
                 st.session_state["report_tab_pdf_bytes"] = pdf_bytes
                 st.session_state["report_tab_pdf_notes"] = pdf_notes
