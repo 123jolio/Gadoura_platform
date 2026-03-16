@@ -154,7 +154,9 @@ APP_SECONDARY_LOGO_URI = _image_path_to_data_uri(APP_SECONDARY_LOGO_PATH)
 
 def render_main_header() -> None:
     secondary_logo_html = (
-        f'<img src="{APP_SECONDARY_LOGO_URI}" class="hcard-logo hcard-logo-secondary" alt="ΕΥΑΘ Υπηρεσίες" width="170" height="113" />'
+        f'<img src="{APP_SECONDARY_LOGO_URI}" class="hcard-logo hcard-logo-secondary" alt="ΕΥΑΘ Υπηρεσίες" '
+        'style="display:block;width:120px;max-width:120px;height:auto;object-fit:contain;'
+        'background:transparent;border:0;box-shadow:none;margin-top:6px;" />'
         if APP_SECONDARY_LOGO_URI
         else ""
     )
@@ -163,7 +165,7 @@ def render_main_header() -> None:
               <div class="hcard-logos">
                 <img src="{APP_LOGO_URL}" class="hcard-logo hcard-logo-primary"
                      alt="ΕΥΑΘ"
-                     width="260" height="60"
+                     style="display:block;width:240px;max-width:240px;height:auto;object-fit:contain;border:0;background:transparent;"
                      onerror="this.style.display='none'" />
                 {secondary_logo_html}
               </div>
