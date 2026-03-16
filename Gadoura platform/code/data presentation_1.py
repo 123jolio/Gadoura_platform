@@ -9,6 +9,7 @@ from plotly.colors import sample_colorscale
 import pydeck as pdk
 import re
 import base64
+import streamlit.components.v1 as components
 from pathlib import Path
 from io import BytesIO
 import time
@@ -239,16 +240,16 @@ def render_deliverables_view() -> None:
     suffix = selected_file.suffix.lower()
     if suffix == ".pdf":
         pdf_b64 = base64.b64encode(file_bytes).decode("ascii")
-        st.markdown(
+        components.html(
             f"""
-            <iframe
-                src="data:application/pdf;base64,{pdf_b64}"
-                width="100%"
-                height="980"
-                style="border:1px solid rgba(148,163,184,.28); border-radius:12px; background:#ffffff;"
-            ></iframe>
+            <div style="width:100%; height:980px; border:1px solid rgba(148,163,184,.28); border-radius:12px; overflow:hidden; background:#ffffff;">
+                <object data="data:application/pdf;base64,{pdf_b64}" type="application/pdf" width="100%" height="100%">
+                    <embed src="data:application/pdf;base64,{pdf_b64}" type="application/pdf" width="100%" height="100%" />
+                </object>
+            </div>
             """,
-            unsafe_allow_html=True,
+            height=1000,
+            scrolling=False,
         )
     elif suffix in {".png", ".jpg", ".jpeg"}:
         st.image(file_bytes, use_container_width=True)
