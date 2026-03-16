@@ -466,6 +466,144 @@ def _dataframe_to_png_bytes(df: pd.DataFrame, title: str = "") -> bytes:
     return buffer.getvalue()
 
 
+@st.cache_data(show_spinner=False)
+def _depth_profiles_chart_board_png(
+    source_df: pd.DataFrame,
+    profile_params: Tuple[str, ...],
+    dates_sorted: Tuple[str, ...],
+    selected_point: str,
+    depth_axis_range: Optional[Tuple[float, float]],
+    param_axis_ranges_json: str,
+    dp_colors: Tuple[str, ...],
+) -> bytes:
+    import matplotlib.pyplot as plt
+
+    if source_df.empty or not profile_params or not dates_sorted:
+        return _dataframe_to_png_bytes(pd.DataFrame({"Μήνυμα": ["Δεν υπάρχουν διαθέσιμα διαγράμματα."]}), "Κατακόρυφα Προφίλ")
+
+    axis_ranges_raw = json.loads(param_axis_ranges_json) if param_axis_ranges_json else {}
+    param_axis_ranges = {
+        str(key): tuple(value) for key, value in axis_ranges_raw.items() if isinstance(value, list) and len(value) == 2
+    }
+    plot_df = source_df.copy()
+    plot_df["date"] = pd.to_datetime(plot_df["date"], errors="coerce").dt.strftime("%d/%m/%Y")
+    n_rows = max(1, len(dates_sorted))
+    n_cols = max(1, len(profile_params))
+
+    fig_width = max(8.0, 4.2 * n_cols)
+    fig_height = max(4.4, 3.8 * n_rows)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height), dpi=220, squeeze=False)
+    fig.patch.set_facecolor("#060d18")
+    plt.subplots_adjust(left=0.09, right=0.985, top=0.95, bottom=0.045, wspace=0.18, hspace=0.62)
+    fig.suptitle(
+        "Κατακόρυφα Προφίλ",
+        x=0.02,
+        y=0.985,
+        ha="left",
+        va="top",
+        fontsize=17,
+        fontweight="bold",
+        color="#e2e8f0",
+        fontfamily="DejaVu Sans",
+    )
+
+    for row_idx, date_str in enumerate(dates_sorted):
+        sub = plot_df[plot_df["date"] == date_str].copy()
+        sub = sub.dropna(subset=["depth_m"]).sort_values("depth_m")
+        for col_idx, param in enumerate(profile_params):
+            ax = axes[row_idx, col_idx]
+            ax.set_facecolor("#ffffff")
+            ax.grid(True, color="#dbe4ee", linewidth=0.7, alpha=0.95)
+            ax.tick_params(colors="#334155", labelsize=7.5)
+            for spine in ax.spines.values():
+                spine.set_color("#cbd5e1")
+
+            if col_idx == 0:
+                ax.text(
+                    -0.02,
+                    1.16,
+                    f"Ημερομηνία: {date_str}",
+                    transform=ax.transAxes,
+                    fontsize=10.5,
+                    fontweight="bold",
+                    color="#e2e8f0",
+                    ha="left",
+                    va="center",
+                    clip_on=False,
+                    fontfamily="DejaVu Sans",
+                )
+
+            ax.set_title(param, fontsize=9.5, color="#0f172a", pad=8, fontfamily="DejaVu Sans")
+            ax.set_xlabel(param, fontsize=8.5, color="#0f172a", fontfamily="DejaVu Sans")
+            ax.set_ylabel("Βάθος (m)" if col_idx == 0 else "", fontsize=8.5, color="#0f172a", fontfamily="DejaVu Sans")
+
+            if depth_axis_range and len(depth_axis_range) == 2:
+                ax.set_ylim(depth_axis_range[0], depth_axis_range[1])
+            if param in param_axis_ranges:
+                ax.set_xlim(param_axis_ranges[param][0], param_axis_ranges[param][1])
+
+            plotted = False
+            if selected_point == "All points":
+                point_list = sorted(sub["point"].dropna().unique())
+                for idx_pt, pt in enumerate(point_list):
+                    psub = sub[sub["point"] == pt][["depth_m", param]].dropna().sort_values("depth_m")
+                    if psub.empty:
+                        continue
+                    color = dp_colors[idx_pt % len(dp_colors)]
+                    ax.plot(
+                        pd.to_numeric(psub[param], errors="coerce"),
+                        psub["depth_m"],
+                        marker="o",
+                        markersize=3.4,
+                        linewidth=1.55,
+                        color=color,
+                        label=f"Σ{int(pt)}",
+                    )
+                    plotted = True
+            else:
+                psub = sub[["depth_m", param]].dropna().sort_values("depth_m")
+                if not psub.empty:
+                    ax.plot(
+                        pd.to_numeric(psub[param], errors="coerce"),
+                        psub["depth_m"],
+                        marker="o",
+                        markersize=3.8,
+                        linewidth=1.7,
+                        color="#2e86c1",
+                        label=f"Σ{selected_point}",
+                    )
+                    plotted = True
+
+            if plotted:
+                leg = ax.legend(
+                    loc="lower right",
+                    fontsize=6.0,
+                    frameon=True,
+                    facecolor="#ffffff",
+                    edgecolor="#e2e8f0",
+                )
+                for text in leg.get_texts():
+                    text.set_color("#334155")
+                    text.set_fontfamily("DejaVu Sans")
+            else:
+                ax.text(
+                    0.5,
+                    0.5,
+                    "Χωρίς δεδομένα",
+                    transform=ax.transAxes,
+                    ha="center",
+                    va="center",
+                    fontsize=9.5,
+                    color="#64748b",
+                    fontfamily="DejaVu Sans",
+                )
+
+    buffer = BytesIO()
+    fig.savefig(buffer, format="png", bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return buffer.getvalue()
+
+
 def render_deliverables_view() -> None:
     st.subheader("Παραδοτέα Έργου")
     st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
@@ -3281,10 +3419,18 @@ with tab_depth:
             export_df_dp = export_df_dp.sort_values(["Ημερομηνία", "Σημείο", "Βάθος (m)"], kind="stable").reset_index(drop=True)
             export_df_dp["Σημείο"] = export_df_dp["Σημείο"].map(lambda x: f"Σημείο {int(x)}" if pd.notna(x) else "")
             csv_dp = export_df_dp.to_csv(index=False).encode("utf-8-sig")
-            png_dp = _dataframe_to_png_bytes(export_df_dp, "Κατακόρυφα Προφίλ")
+            png_dp = _depth_profiles_chart_board_png(
+                range_source[["date", "point", "depth_m"] + profile_params].copy(),
+                tuple(profile_params),
+                tuple(sel.strftime("%d/%m/%Y") for sel in dates_sorted),
+                str(sel_point_dp),
+                tuple(depth_axis_range) if depth_axis_range else None,
+                json.dumps(param_axis_ranges, ensure_ascii=False),
+                tuple(dp_colors),
+            )
 
             st.markdown("**Εξαγωγή δεδομένων προφίλ**")
-            st.caption("Κατεβάστε τα δεδομένα που χρησιμοποιούνται στα τρέχοντα κατακόρυφα προφίλ ως CSV ή PNG.")
+            st.caption("Κατεβάστε τα δεδομένα των προφίλ ως CSV ή όλα τα επιλεγμένα διαγράμματα ως ενιαίο PNG υψηλής ανάλυσης.")
             st.download_button(
                 "⬇️ Εξαγωγή CSV",
                 data=csv_dp,
@@ -3294,9 +3440,9 @@ with tab_depth:
                 key="depth_profiles_export_csv",
             )
             st.download_button(
-                "🖼️ Εξαγωγή PNG",
+                "🖼️ Εξαγωγή διαγραμμάτων PNG",
                 data=png_dp,
-                file_name="depth_profiles_data.png",
+                file_name="depth_profiles_charts.png",
                 mime="image/png",
                 use_container_width=True,
                 key="depth_profiles_export_png",
