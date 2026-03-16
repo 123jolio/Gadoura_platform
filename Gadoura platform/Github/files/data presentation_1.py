@@ -493,7 +493,7 @@ def _depth_profiles_chart_board_png(
     fig_height = max(4.8, 4.0 * n_rows)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height), dpi=220, squeeze=False)
     fig.patch.set_facecolor("#060d18")
-    plt.subplots_adjust(left=0.08, right=0.985, top=0.95, bottom=0.05, wspace=0.18, hspace=0.62)
+    plt.subplots_adjust(left=0.08, right=0.985, top=0.95, bottom=0.08, wspace=0.18, hspace=0.62)
     fig.suptitle(
         "Κατακόρυφα Προφίλ",
         x=0.02,
@@ -517,23 +517,20 @@ def _depth_profiles_chart_board_png(
             for spine in ax.spines.values():
                 spine.set_color("#cbd5e1")
 
-            if col_idx == 0:
-                ax.text(
-                    -0.02,
-                    1.16,
-                    f"Ημερομηνία: {date_str}",
-                    transform=ax.transAxes,
-                    fontsize=11.5,
-                    fontweight="bold",
-                    color="#e2e8f0",
-                    ha="left",
-                    va="center",
-                    clip_on=False,
-                    fontfamily="DejaVu Sans",
-                )
-
-            ax.set_title(param, fontsize=10, color="#0f172a", pad=8, fontfamily="DejaVu Sans")
-            ax.set_xlabel(param, fontsize=9, color="#0f172a", fontfamily="DejaVu Sans")
+            ax.set_title(
+                f"Ημερομηνία: {date_str}\n{param}",
+                fontsize=9.4,
+                color="#0f172a",
+                pad=7,
+                fontfamily="DejaVu Sans",
+            )
+            ax.set_xlabel(
+                f"Χ άξονας: {param}",
+                fontsize=8.6,
+                color="#0f172a",
+                labelpad=4,
+                fontfamily="DejaVu Sans",
+            )
             ax.set_ylabel("Βάθος (m)" if col_idx == 0 else "", fontsize=9, color="#0f172a", fontfamily="DejaVu Sans")
 
             if depth_axis_range and len(depth_axis_range) == 2:
