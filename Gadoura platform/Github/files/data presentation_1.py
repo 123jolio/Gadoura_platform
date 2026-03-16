@@ -3105,6 +3105,44 @@ with tab_depth:
                 dspan = dmax - dmin
                 dpad = dspan * 0.04 if dspan > 0 else max(abs(dmax) * 0.05, 0.5)
                 depth_axis_range = [dmax + dpad, max(0.0, dmin - dpad)]
+
+            export_cols_dp = ["date", "point", "depth", "depth_m"] + profile_params
+            export_df_dp = range_source[export_cols_dp].copy()
+            export_df_dp["date"] = pd.to_datetime(export_df_dp["date"], errors="coerce").dt.strftime("%d/%m/%Y")
+            export_df_dp = export_df_dp.rename(
+                columns={
+                    "date": "Ημερομηνία",
+                    "point": "Σημείο",
+                    "depth": "Επίπεδο Βάθους",
+                    "depth_m": "Βάθος (m)",
+                }
+            )
+            export_df_dp = export_df_dp.sort_values(["Ημερομηνία", "Σημείο", "Βάθος (m)"], kind="stable").reset_index(drop=True)
+            export_df_dp["Σημείο"] = export_df_dp["Σημείο"].map(lambda x: f"Σημείο {int(x)}" if pd.notna(x) else "")
+            csv_dp = export_df_dp.to_csv(index=False).encode("utf-8-sig")
+            png_dp = _dataframe_to_png_bytes(export_df_dp, "Κατακόρυφα Προφίλ")
+
+            st.markdown("**Εξαγωγή δεδομένων προφίλ**")
+            st.caption("Κατεβάστε τα δεδομένα που χρησιμοποιούνται στα τρέχοντα κατακόρυφα προφίλ ως CSV ή PNG.")
+            export_dp_col_csv, export_dp_col_png, export_dp_col_spacer = st.columns([1, 1, 3])
+            with export_dp_col_csv:
+                st.download_button(
+                    "⬇️ Εξαγωγή CSV",
+                    data=csv_dp,
+                    file_name="depth_profiles_data.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="depth_profiles_export_csv",
+                )
+            with export_dp_col_png:
+                st.download_button(
+                    "🖼️ Εξαγωγή PNG",
+                    data=png_dp,
+                    file_name="depth_profiles_data.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key="depth_profiles_export_png",
+                )
             
             for row_idx, sel_date_dp in enumerate(dates_sorted):
                 sub = df[df["date"] == sel_date_dp].copy()
