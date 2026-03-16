@@ -548,6 +548,8 @@ if selected_main_view == "Δορυφορικά δεδομένα":
 # ─── Load data ─────────────────────────────────────────────────────────────────
 EXCEL_PATH = "ΑΠΟΤΕΛΕΣΜΑΤΑ_ΔΟΡΥΦΟΡΙΚΗΣ_ΠΑΡΑΚΟΛΟΥΘΗΣΗΣ_ΦΡΑΓΜΑΤΟΣ_2025-2026_ΕΥΑΘ.xlsx"
 
+_use_light_plot_theme()
+
 def _simplify_name(name):
     return re.sub(r"[\s_.-]+", "", name).lower()
 

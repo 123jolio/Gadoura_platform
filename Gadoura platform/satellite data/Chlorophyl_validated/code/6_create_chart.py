@@ -1,6 +1,7 @@
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 import rasterio
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -28,10 +29,34 @@ def geographic_to_pixel(lon, lat, transform):
     return int(col), int(row)
 
 
+def resolve_input_file(run_dir, filename):
+    for candidate in (
+        run_dir / filename,
+        run_dir.parent / filename,
+        run_dir.parent.parent / filename,
+    ):
+        if candidate.exists():
+            return candidate
+
+    for search_root in (run_dir.parent, run_dir.parent.parent):
+        if search_root.exists():
+            for candidate in search_root.rglob(filename):
+                if candidate.is_file():
+                    return candidate
+
+    raise FileNotFoundError(f"Could not find '{filename}' near {run_dir}.")
+
+
 def main():
-    images_folder = r'C:\Users\John Lioumbas\Desktop\Software_Gadoura\GeoTIFFs'
-    sampling_kml_path = r'C:\Users\John Lioumbas\Desktop\Software_Gadoura\sampling.kml'
-    lake_height_path = r'C:\Users\John Lioumbas\Desktop\Software_Gadoura\lake height.xlsx'
+    run_dir = Path.cwd()
+    images_folder = run_dir / 'GeoTIFFs'
+    sampling_kml_path = resolve_input_file(run_dir, 'sampling.kml')
+    lake_height_path = resolve_input_file(run_dir, 'lake height.xlsx')
+    chart_output_path = run_dir / 'lake_sampling_chart.png'
+    overlay_output_path = run_dir / 'first_geotiff_sampling_points.png'
+
+    if not images_folder.is_dir():
+        raise FileNotFoundError(f"Could not find GeoTIFF folder: {images_folder}")
 
     sampling_points = parse_sampling_kml(sampling_kml_path)
     results = {name: [] for name, _, _ in sampling_points}
@@ -52,7 +77,7 @@ def main():
                 print(f"Error parsing date from filename {filename}: {ve}")
                 continue
 
-            image_path = os.path.join(images_folder, filename)
+            image_path = images_folder / filename
 
             try:
                 with rasterio.open(image_path) as src:
@@ -132,7 +157,15 @@ def main():
     ax_lake.set_xlim(datetime(2015, 1, 1), datetime(2025, 12, 31))
 
     plt.tight_layout()
-    plt.show()
+    fig.savefig(chart_output_path, dpi=200, bbox_inches='tight')
+    print(f"Saved chart to: {chart_output_path}")
+
+    if first_image_data is not None:
+        fig_img.savefig(overlay_output_path, dpi=200, bbox_inches='tight')
+        print(f"Saved sampling overlay to: {overlay_output_path}")
+        plt.close(fig_img)
+
+    plt.close(fig)
 
 
 if __name__ == '__main__':
