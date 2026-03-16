@@ -493,6 +493,15 @@ def resolve_folder(key: str) -> Path | None:
     return None
 
 
+def is_case_available(key: str) -> bool:
+    cfg = CASE_BY_KEY[key]
+    if cfg.get("is_level"):
+        return True
+    if cfg.get("children"):
+        return any(is_case_available(child) for child in cfg["children"] if child in CASE_BY_KEY)
+    return resolve_folder(key) is not None
+
+
 def parse_date(p: Path) -> date | None:
     m = DATE_RE.search(p.stem)
     if not m:
@@ -1186,12 +1195,19 @@ def render_satellite_dashboard(
     st.markdown("<div class='slabel'>Επιλογή Θεματικής Ενότητας</div>",
                 unsafe_allow_html=True)
 
-    if "case_key" not in st.session_state:
-        st.session_state["case_key"] = "chlorophyll_validated"
-    elif st.session_state["case_key"] in CASE_GROUP_PARENT_BY_CHILD:
-        st.session_state["case_key"] = CASE_GROUP_PARENT_BY_CHILD[st.session_state["case_key"]]
+    available_top_keys = [key for key in CASE_DISPLAY_ORDER if key in CASE_BY_KEY and is_case_available(key)]
+    if not available_top_keys:
+        st.error("Δεν υπάρχουν διαθέσιμες δορυφορικές ενότητες στο τρέχον περιβάλλον.")
+        return
 
-    case_buttons = [CASE_BY_KEY[k] for k in CASE_DISPLAY_ORDER if k in CASE_BY_KEY]
+    default_top_key = "chlorophyll_validated" if "chlorophyll_validated" in available_top_keys else available_top_keys[0]
+    current_top_key = st.session_state.get("case_key")
+    if current_top_key in CASE_GROUP_PARENT_BY_CHILD:
+        current_top_key = CASE_GROUP_PARENT_BY_CHILD[current_top_key]
+    if current_top_key not in available_top_keys:
+        st.session_state["case_key"] = default_top_key
+
+    case_buttons = [CASE_BY_KEY[k] for k in available_top_keys]
     cols = st.columns(len(case_buttons))
     for col, cfg in zip(cols, case_buttons):
         active = st.session_state["case_key"] == cfg["key"]
@@ -1209,7 +1225,7 @@ def render_satellite_dashboard(
     top_cfg = CASE_BY_KEY[top_key]
     active_key = top_key
     if top_cfg.get("children"):
-        child_keys = [child for child in top_cfg["children"] if child in CASE_BY_KEY]
+        child_keys = [child for child in top_cfg["children"] if child in CASE_BY_KEY and is_case_available(child)]
         if not child_keys:
             st.warning("Δεν υπάρχουν διαθέσιμες υποκατηγορίες για αυτή την ενότητα.")
             return
