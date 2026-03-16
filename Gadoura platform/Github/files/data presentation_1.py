@@ -7,7 +7,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from plotly.colors import sample_colorscale
 import pydeck as pdk
-import fitz  # type: ignore
 import re
 from pathlib import Path
 from io import BytesIO
@@ -17,6 +16,11 @@ import os
 import json
 import math
 from typing import Any, Dict, Optional, Tuple
+
+try:
+    import fitz  # type: ignore
+except Exception:
+    fitz = None
 
 # ── Dark Plotly theme ─────────────────────────────────────────────────────────
 _PLT_BG   = "#060d18"
@@ -175,12 +179,16 @@ def _read_binary_file(path: str) -> bytes:
 
 @st.cache_data(show_spinner=False)
 def _pdf_page_count(path: str) -> int:
+    if fitz is None:
+        raise RuntimeError("PyMuPDF is not installed.")
     with fitz.open(path) as doc:
         return doc.page_count
 
 
 @st.cache_data(show_spinner=False)
 def _render_pdf_page_png(path: str, page_index: int, zoom: float = 1.8) -> bytes:
+    if fitz is None:
+        raise RuntimeError("PyMuPDF is not installed.")
     with fitz.open(path) as doc:
         page = doc.load_page(page_index)
         pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
@@ -230,6 +238,9 @@ def render_deliverables_view() -> None:
 
     suffix = selected_file.suffix.lower()
     if suffix == ".pdf":
+        if fitz is None:
+            st.warning("Το preview PDF δεν είναι διαθέσιμο σε αυτό το περιβάλλον. Χρησιμοποιήστε τη λήψη αρχείου.")
+            return
         try:
             page_count = _pdf_page_count(str(selected_file))
         except Exception as exc:
