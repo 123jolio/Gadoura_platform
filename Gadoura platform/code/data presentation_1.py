@@ -2801,14 +2801,15 @@ with tab_depth:
                         legend=dict(
                             orientation="h",
                             yanchor="bottom",
-                            y=1.02,
-                            xanchor="left",
-                            x=0,
+                            y=1.14,
+                            xanchor="center",
+                            x=0.5,
+                            font=dict(size=11),
                             bgcolor="rgba(13,30,47,.85)",
                             bordercolor="rgba(6,214,240,.2)",
                             borderwidth=1
                         ),
-                        margin=dict(t=60, b=44, l=60, r=20)
+                        margin=dict(t=110, b=44, l=60, r=20)
                     )
                     fig_p.update_xaxes(
                         title_text=None,
