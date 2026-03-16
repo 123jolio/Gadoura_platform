@@ -624,6 +624,117 @@ def _depth_profiles_chart_board_png(
     return buffer.getvalue()
 
 
+def _draw_pdf_table_page(pdf, title: str, df: pd.DataFrame, max_rows: int = 30) -> None:
+    import matplotlib.pyplot as plt
+
+    draw_df = df.copy()
+    if draw_df.empty:
+        draw_df = pd.DataFrame({"Μήνυμα": ["Δεν υπάρχουν δεδομένα."]})
+    if len(draw_df) > max_rows:
+        draw_df = draw_df.head(max_rows).copy()
+
+    render_df = draw_df.copy()
+    for col in render_df.columns:
+        if pd.api.types.is_float_dtype(render_df[col]):
+            render_df[col] = render_df[col].map(lambda x: "" if pd.isna(x) else f"{x:.4g}")
+        else:
+            render_df[col] = render_df[col].map(lambda x: "" if pd.isna(x) else str(x))
+
+    fig, ax = plt.subplots(figsize=(11.69, 8.27), dpi=160)
+    fig.patch.set_facecolor("white")
+    ax.axis("off")
+    ax.set_title(title, fontsize=14, fontweight="bold", loc="left", pad=10, fontfamily="DejaVu Sans")
+
+    table = ax.table(
+        cellText=render_df.values.tolist(),
+        colLabels=[str(c) for c in render_df.columns],
+        cellLoc="left",
+        colLoc="left",
+        loc="upper left",
+        bbox=[0.01, 0.02, 0.98, 0.92],
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(7.5 if len(render_df.columns) <= 10 else 6.8)
+    table.scale(1, 1.18)
+
+    for (r, c), cell in table.get_celld().items():
+        cell.set_edgecolor("#cbd5e1")
+        cell.set_linewidth(0.6)
+        cell.get_text().set_fontfamily("DejaVu Sans")
+        if r == 0:
+            cell.set_facecolor("#0f172a")
+            cell.get_text().set_color("white")
+            cell.get_text().set_weight("bold")
+        else:
+            cell.set_facecolor("#f8fafc" if r % 2 else "#eef4fb")
+            cell.get_text().set_color("#0f172a")
+
+    if len(df) > max_rows:
+        fig.text(
+            0.01,
+            0.01,
+            f"Εμφανίζονται οι πρώτες {max_rows} γραμμές από {len(df)}.",
+            fontsize=9,
+            color="#64748b",
+            family="DejaVu Sans",
+        )
+
+    pdf.savefig(fig, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+def _build_report_tab_pdf_bytes(
+    title: str,
+    subtitle: str,
+    tables: list[tuple[str, pd.DataFrame]],
+    figures: list[tuple[str, go.Figure]],
+) -> tuple[bytes, list[str]]:
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    from PIL import Image
+
+    notes: list[str] = []
+    pdf_buffer = BytesIO()
+    with PdfPages(pdf_buffer) as pdf:
+        # Cover page
+        fig_cover, ax_cover = plt.subplots(figsize=(11.69, 8.27), dpi=160)
+        fig_cover.patch.set_facecolor("white")
+        ax_cover.axis("off")
+        ax_cover.text(0.03, 0.88, title, fontsize=22, fontweight="bold", color="#0f172a", family="DejaVu Sans")
+        ax_cover.text(0.03, 0.80, subtitle, fontsize=12, color="#334155", family="DejaVu Sans")
+        ax_cover.text(
+            0.03,
+            0.06,
+            f"Ημερομηνία εξαγωγής: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}",
+            fontsize=10,
+            color="#64748b",
+            family="DejaVu Sans",
+        )
+        pdf.savefig(fig_cover, bbox_inches="tight", facecolor="white")
+        plt.close(fig_cover)
+
+        for table_title, df_tbl in tables:
+            _draw_pdf_table_page(pdf, table_title, df_tbl)
+
+        for fig_title, fig_obj in figures:
+            try:
+                img_bytes = fig_obj.to_image(format="png", width=1800, height=1080, scale=2)
+                image = Image.open(BytesIO(img_bytes)).convert("RGB")
+            except Exception as exc:
+                notes.append(f"{fig_title}: {exc}")
+                continue
+
+            fig_page, ax_page = plt.subplots(figsize=(11.69, 8.27), dpi=140)
+            fig_page.patch.set_facecolor("white")
+            ax_page.axis("off")
+            ax_page.set_title(fig_title, fontsize=13, loc="left", pad=10, color="#0f172a", fontfamily="DejaVu Sans")
+            ax_page.imshow(image)
+            pdf.savefig(fig_page, bbox_inches="tight", facecolor="white")
+            plt.close(fig_page)
+
+    return pdf_buffer.getvalue(), notes
+
+
 def render_deliverables_view() -> None:
     st.subheader("Παραδοτέα Έργου")
     st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
@@ -3804,6 +3915,8 @@ with tab_depth:
 # ══════════════════════════════════════════════════════════════
 with tab_report:
     st.subheader("3.3.1. Μετρήσεις Πεδίου")
+    report_pdf_tables: list[tuple[str, pd.DataFrame]] = []
+    report_pdf_figures: list[tuple[str, go.Figure]] = []
 
     do_kpi_df = _build_do_summary(df)
     toc_kpi_df = _build_toc_summary(df)
@@ -3845,6 +3958,12 @@ with tab_report:
         strat_df[["Ημερομηνία", "T @ 1m (°C)", "T @ 5m (°C)", "T @ 10m (°C)", "T @ 15m (°C)", "T @ 20m (°C)", "ΔT (°C)", "Κατάσταση"]],
         use_container_width=True,
         hide_index=True,
+    )
+    report_pdf_tables.append(
+        (
+            "3.3.2 Θερμική Στρωμάτωση",
+            strat_df[["Ημερομηνία", "T @ 1m (°C)", "T @ 5m (°C)", "T @ 10m (°C)", "T @ 15m (°C)", "T @ 20m (°C)", "ΔT (°C)", "Κατάσταση"]].copy(),
+        )
     )
 
     if not strat_df.empty:
@@ -3927,6 +4046,7 @@ with tab_report:
         fig_temp.update_yaxes(title_text="Θερμοκρασία (°C)", secondary_y=False)
         fig_temp.update_yaxes(title_text="ΔT (°C)", secondary_y=True)
         _report_plot(fig_temp, "Εξέλιξη θερμικής στρωμάτωσης", 430)
+        report_pdf_figures.append(("Εξέλιξη θερμικής στρωμάτωσης", fig_temp))
 
     # 3.3.3
     _add_report_section_title("3.3.3. Υπολιμνιακή Ανοξία — Διαλυτό Οξυγόνο")
@@ -3940,6 +4060,7 @@ with tab_report:
 
     do_df = _build_do_summary(df)
     st.dataframe(do_df, use_container_width=True, hide_index=True)
+    report_pdf_tables.append(("3.3.3 Υπολιμνιακή Ανοξία (DO)", do_df.copy()))
 
     if not do_df.empty:
         do_plot = do_df.copy()
@@ -3975,6 +4096,7 @@ with tab_report:
         fig_do.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
         fig_do.update_yaxes(title_text="DO (mg/L)")
         _report_plot(fig_do, "Κατακόρυφη εξέλιξη διαλυμένου οξυγόνου", 430)
+        report_pdf_figures.append(("Κατακόρυφη εξέλιξη διαλυμένου οξυγόνου", fig_do))
 
     deep_points = sorted(df["point"].dropna().unique().tolist())
     if deep_points:
@@ -3996,9 +4118,11 @@ with tab_report:
             )
             fig_hov_do.update_yaxes(autorange="reversed")
             _report_plot(fig_hov_do, f"Heatmap βάθους–χρόνου DO — Σημείο {sel_hov_point}", 420)
+            report_pdf_figures.append((f"Heatmap βάθους–χρόνου DO — Σημείο {sel_hov_point}", fig_hov_do))
 
     anox_df = _build_anoxic_zone(df)
     if not anox_df.empty:
+        report_pdf_tables.append(("Ανοξική Ζώνη", anox_df.copy()))
         _add_report_section_title("Ανοξική Ζώνη — Πάχος και Κλάσμα Στήλης")
         fig_anox = make_subplots(specs=[[{"secondary_y": True}]])
         fig_anox.add_trace(
@@ -4031,6 +4155,7 @@ with tab_report:
             secondary_y=True,
         )
         _report_plot(fig_anox, "Χρονική εξέλιξη ανοξικής ζώνης", 420)
+        report_pdf_figures.append(("Χρονική εξέλιξη ανοξικής ζώνης", fig_anox))
 
     # 3.3.4
     _add_report_section_title("3.3.4. Μαγγάνιο (Mn²⁺) — Βαθυμετρική Κατανομή")
@@ -4043,6 +4168,7 @@ with tab_report:
 
     mn_df = _build_mn_summary(df)
     st.dataframe(mn_df, use_container_width=True, hide_index=True)
+    report_pdf_tables.append(("3.3.4 Μαγγάνιο (Mn²⁺)", mn_df.copy()))
 
     if not mn_df.empty:
         mn_plot = mn_df.copy()
@@ -4072,6 +4198,7 @@ with tab_report:
         fig_mn.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
         fig_mn.update_yaxes(title_text="Mn²⁺ (mg/L)")
         _report_plot(fig_mn, "Βαθυμετρική εξέλιξη μαγγανίου", 430)
+        report_pdf_figures.append(("Βαθυμετρική εξέλιξη μαγγανίου", fig_mn))
 
     src_corr = _prepare_report_source(df)[["date", "point", "depth_m", "Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)"]].copy()
     src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"] = pd.to_numeric(src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"], errors="coerce")
@@ -4113,6 +4240,7 @@ with tab_report:
             annotation_position="top right",
         )
         _report_plot(fig_corr, "Συσχέτιση DO–Mn²⁺", 420)
+        report_pdf_figures.append(("Συσχέτιση DO–Mn²⁺", fig_corr))
 
     if deep_points:
         mn_hov = _build_depth_time_matrix(df, sel_hov_point, "Mn²⁺ (mg/L)")
@@ -4127,6 +4255,7 @@ with tab_report:
             )
             fig_hov_mn.update_yaxes(autorange="reversed")
             _report_plot(fig_hov_mn, f"Heatmap βάθους–χρόνου Mn²⁺ — Σημείο {sel_hov_point}", 420)
+            report_pdf_figures.append((f"Heatmap βάθους–χρόνου Mn²⁺ — Σημείο {sel_hov_point}", fig_hov_mn))
 
     # 3.3.5
     _add_report_section_title("3.3.5. Ολικός Οργανικός Άνθρακας (TOC)")
@@ -4143,6 +4272,9 @@ with tab_report:
             toc_df[["Ημερομηνία", "Εύρος TOC (mg/L)", "Μέση τιμή (mg/L)", "N σημεία"]],
             use_container_width=True,
             hide_index=True,
+        )
+        report_pdf_tables.append(
+            ("3.3.5 TOC", toc_df[["Ημερομηνία", "Εύρος TOC (mg/L)", "Μέση τιμή (mg/L)", "N σημεία"]].copy())
         )
 
         fig_toc = go.Figure()
@@ -4200,6 +4332,7 @@ with tab_report:
         fig_toc.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
         fig_toc.update_yaxes(title_text="TOC (mg/L)")
         _report_plot(fig_toc, "Εξέλιξη TOC", 420)
+        report_pdf_figures.append(("Εξέλιξη TOC", fig_toc))
 
     # 3.3.6
     _add_report_section_title("3.3.6. Χλωροφύλλη-α και Συνθήκες Εκκίνησης Λεύκανσης")
@@ -4216,6 +4349,9 @@ with tab_report:
             chla_df[["Ημερομηνία", "Chl-a (μg/L)", "Secchi (m)", "WST ~(°C)", "Ευνοϊκό για λεύκανση;"]],
             use_container_width=True,
             hide_index=True,
+        )
+        report_pdf_tables.append(
+            ("3.3.6 Χλωροφύλλη-α και Secchi", chla_df[["Ημερομηνία", "Chl-a (μg/L)", "Secchi (m)", "WST ~(°C)", "Ευνοϊκό για λεύκανση;"]].copy())
         )
 
         fig_chla = make_subplots(specs=[[{"secondary_y": True}]])
@@ -4257,6 +4393,7 @@ with tab_report:
         fig_chla.update_yaxes(title_text="Χλωροφύλλη-α (μg/L)", secondary_y=False)
         fig_chla.update_yaxes(title_text="Secchi (m)", secondary_y=True)
         _report_plot(fig_chla, "Χλωροφύλλη-α και διαφάνεια νερού", 430)
+        report_pdf_figures.append(("Χλωροφύλλη-α και διαφάνεια νερού", fig_chla))
 
     # 3.3.7
     _add_report_section_title("3.3.7. Ηλεκτρική Αγωγιμότητα, Ασβέστιο, Αλκαλικότητα")
@@ -4274,6 +4411,9 @@ with tab_report:
             chem_df[["Ημερομηνία", "EC @ 1m", "EC @ 12m", "EC @ 20m", "Ca mean", "Αλκαλικότητα mean"]],
             use_container_width=True,
             hide_index=True,
+        )
+        report_pdf_tables.append(
+            ("3.3.7 EC, Ca, Αλκαλικότητα", chem_df[["Ημερομηνία", "EC @ 1m", "EC @ 12m", "EC @ 20m", "Ca mean", "Αλκαλικότητα mean"]].copy())
         )
 
         fig_chem = make_subplots(specs=[[{"secondary_y": True}]])
@@ -4331,12 +4471,14 @@ with tab_report:
         fig_chem.update_yaxes(title_text="Αγωγιμότητα (μS/cm)", secondary_y=False)
         fig_chem.update_yaxes(title_text="Ca / Αλκαλικότητα", secondary_y=True)
         _report_plot(fig_chem, "EC, ασβέστιο και αλκαλικότητα", 440)
+        report_pdf_figures.append(("EC, ασβέστιο και αλκαλικότητα", fig_chem))
 
     # 3.3.8
     _add_report_section_title("3.3.8. Πρόσθετοι Δείκτες Ερμηνείας")
 
     ph_df = _build_ph_summary(df)
     if not ph_df.empty:
+        report_pdf_tables.append(("pH σύνοψη", ph_df.copy()))
         _add_report_section_title("pH — Σύνδεση με Λεύκανση και Αναερόβιες Συνθήκες")
         fig_ph = go.Figure()
         fig_ph.add_trace(
@@ -4381,10 +4523,12 @@ with tab_report:
         fig_ph.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
         fig_ph.update_yaxes(title_text="pH", range=[7.0, 9.5])
         _report_plot(fig_ph, "Εξέλιξη pH επιφάνειας και βαθύτερων στρωμάτων", 420)
+        report_pdf_figures.append(("Εξέλιξη pH επιφάνειας και βαθύτερων στρωμάτων", fig_ph))
 
     mgca_df = _build_mgca_summary(df)
     mgca_plot = mgca_df.dropna(subset=["MgCa_ratio"]) if not mgca_df.empty else pd.DataFrame()
     if not mgca_plot.empty:
+        report_pdf_tables.append(("Mg/Ca σύνοψη", mgca_plot.copy()))
         _add_report_section_title("Mg/Ca — Fingerprint Λεύκανσης")
         st.markdown(
             "Κατά τη λεύκανση το Ca απομακρύνεται σε CaCO₃ ενώ το Mg παραμένει "
@@ -4416,9 +4560,11 @@ with tab_report:
         fig_mgca.update_yaxes(title_text="Mg/Ca λόγος", secondary_y=False)
         fig_mgca.update_yaxes(title_text="Ca μέσο (mg/L)", showgrid=False, secondary_y=True)
         _report_plot(fig_mgca, "Mg/Ca λόγος και ασβέστιο", 400)
+        report_pdf_figures.append(("Mg/Ca λόγος και ασβέστιο", fig_mgca))
 
     nh4_df = _build_nh4_summary(df)
     if not nh4_df.empty:
+        report_pdf_tables.append(("NH₄⁺ σύνοψη", nh4_df.copy()))
         _add_report_section_title("NH₄⁺ — Δείκτης Αναερόβιας Αποδόμησης")
         st.markdown(
             "Συσσώρευση NH₄⁺ σε βαθύτερα στρώματα = αποδόμηση οργανικής ύλης "
@@ -4446,16 +4592,48 @@ with tab_report:
         fig_nh4.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
         fig_nh4.update_yaxes(title_text="NH₄⁺ (mg/L)")
         _report_plot(fig_nh4, "Εξέλιξη αμμωνιακών ανά βάθος", 400)
+        report_pdf_figures.append(("Εξέλιξη αμμωνιακών ανά βάθος", fig_nh4))
 
     # 3.3.9
     _add_report_section_title("3.3.9. Συνοπτικός Πίνακας Επιβεβαίωσης")
     conf_df = _build_confirmation_table()
     st.dataframe(conf_df, use_container_width=True, hide_index=True)
+    report_pdf_tables.append(("3.3.9 Συνοπτικός Πίνακας Επιβεβαίωσης", conf_df.copy()))
     st.success(
         "Συμπέρασμα: Τα αποτελέσματα επαληθεύουν πλήρως τις κεντρικές εκτιμήσεις για εποχική στρωμάτωση, "
         "υπολιμνιακή ανοξία και αναγωγική κινητοποίηση Mn, ενώ οι εκκρεμότητες μεταφέρονται στο επίπεδο "
         "στοχευμένων εργαστηριακών αναλύσεων (XRD/SEM, Eh)."
     )
+
+    st.markdown("#### Εξαγωγή Καρτέλας σε PDF")
+    st.caption("Δημιουργήστε PDF με τους πίνακες και τα διαγράμματα του tab «Επιστημονική Ερμηνεία».")
+    prep_col, dl_col = st.columns([1, 1.2])
+    with prep_col:
+        if st.button("📄 Δημιουργία PDF", key="report_tab_pdf_prepare"):
+            with st.spinner("Παραγωγή PDF..."):
+                pdf_bytes, pdf_notes = _build_report_tab_pdf_bytes(
+                    title="Επιστημονική Ερμηνεία — Μετρήσεις Πεδίου",
+                    subtitle=f"Ημερομηνίες εκστρατειών: {len(dates)} | Σημεία: {df['point'].nunique()} | Βάθη: {df['depth'].nunique()}",
+                    tables=report_pdf_tables,
+                    figures=report_pdf_figures,
+                )
+                st.session_state["report_tab_pdf_bytes"] = pdf_bytes
+                st.session_state["report_tab_pdf_notes"] = pdf_notes
+    with dl_col:
+        if st.session_state.get("report_tab_pdf_bytes"):
+            st.download_button(
+                "⬇️ Λήψη PDF καρτέλας",
+                data=st.session_state["report_tab_pdf_bytes"],
+                file_name=f"scientific_report_tab_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="report_tab_pdf_download",
+            )
+    if st.session_state.get("report_tab_pdf_notes"):
+        st.info(
+            "Κάποια διαγράμματα δεν ενσωματώθηκαν στο PDF. "
+            "Αν χρειάζεται πλήρης εξαγωγή plots, πρόσθεσε το πακέτο `kaleido` στο περιβάλλον."
+        )
 
 # ══════════════════════════════════════════════════════════════
 # TAB 4: COMPARE POINTS
