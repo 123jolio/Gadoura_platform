@@ -26,6 +26,10 @@ _PLT_GRID = "rgba(6,214,240,.06)"
 _PLT_LINE = "rgba(6,214,240,.18)"
 _PLT_TICK = "#5aa8c4"
 _PLT_TITLE= "#dff2fa"
+_PLT_LEGEND_BG = "rgba(10,21,37,.9)"
+_PLT_LEGEND_BORDER = "rgba(6,214,240,.2)"
+_PLT_HOVER_BG = "#0a1525"
+_PLT_HOVER_FONT = "#dff2fa"
 
 def _dark_layout(**extra):
     base = dict(
@@ -36,12 +40,26 @@ def _dark_layout(**extra):
                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"), title_font=dict(color=_PLT_TITLE)),
         yaxis=dict(showgrid=True, gridcolor=_PLT_GRID, linecolor=_PLT_LINE,
                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"), title_font=dict(color=_PLT_TITLE)),
-        legend=dict(bgcolor="rgba(10,21,37,.9)", bordercolor="rgba(6,214,240,.2)",
+        legend=dict(bgcolor=_PLT_LEGEND_BG, bordercolor=_PLT_LEGEND_BORDER,
                     borderwidth=1, font=dict(color=_PLT_TICK)),
-        hoverlabel=dict(bgcolor="#0a1525", font_color="#dff2fa", bordercolor="rgba(6,214,240,.3)"),
+        hoverlabel=dict(bgcolor=_PLT_HOVER_BG, font_color=_PLT_HOVER_FONT, bordercolor=_PLT_LEGEND_BORDER),
     )
     base.update(extra)
     return base
+
+def _use_light_plot_theme():
+    global _PLT_BG, _PLT_PAPER, _PLT_GRID, _PLT_LINE, _PLT_TICK, _PLT_TITLE
+    global _PLT_LEGEND_BG, _PLT_LEGEND_BORDER, _PLT_HOVER_BG, _PLT_HOVER_FONT
+    _PLT_BG = "#ffffff"
+    _PLT_PAPER = "#ffffff"
+    _PLT_GRID = "rgba(15,23,42,.10)"
+    _PLT_LINE = "rgba(15,23,42,.18)"
+    _PLT_TICK = "#334155"
+    _PLT_TITLE = "#0f172a"
+    _PLT_LEGEND_BG = "rgba(255,255,255,.96)"
+    _PLT_LEGEND_BORDER = "rgba(15,23,42,.12)"
+    _PLT_HOVER_BG = "#ffffff"
+    _PLT_HOVER_FONT = "#0f172a"
 
 def _apply_dark(fig, height=None, title=None, **kw):
     layout = _dark_layout(**kw)
@@ -571,6 +589,8 @@ if not selected_main_view:
 if selected_main_view == "Δορυφορικά δεδομένα":
     render_satellite_data_view(app_variant=selected_app_variant)
     st.stop()
+
+_use_light_plot_theme()
 
 # ─── Load data ─────────────────────────────────────────────────────────────────
 EXCEL_PATH = "ΑΠΟΤΕΛΕΣΜΑΤΑ_ΔΟΡΥΦΟΡΙΚΗΣ_ΠΑΡΑΚΟΛΟΥΘΗΣΗΣ_ΦΡΑΓΜΑΤΟΣ_2025-2026_ΕΥΑΘ.xlsx"

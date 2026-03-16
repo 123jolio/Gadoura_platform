@@ -165,7 +165,7 @@ CASE_CONFIG = [
         "icon":  "🧫",
         "folders": [],
         "has_chl": False,
-        "children": ["cya", "cdom"],
+        "children": ["cya", "cdom", "doc", "color"],
     },
     {
         "key":   "cya",
@@ -190,6 +190,34 @@ CASE_CONFIG = [
         "chart_image": _resolve_optional_asset(
             DATA_ROOT / "charts_cdom" / "lake_sampling_chart.png",
             GADOURA_ROOT / "CDOM" / "lake_sampling_chart.png",
+        ),
+        "chart_expander_title": "📊 Διαγράμματα",
+        "chart_caption": "Δειγματοληψία λίμνης",
+        "has_chl": False,
+    },
+    {
+        "key":   "doc",
+        "label": "DOC",
+        "label_full": "DOC",
+        "icon":  "🧫",
+        "folders": [GADOURA_ROOT / "DOC" / "GeoTIFFs"],
+        "chart_image": _resolve_optional_asset(
+            DATA_ROOT / "charts_dom" / "lake_sampling_chart.png",
+            GADOURA_ROOT / "DOC" / "lake_sampling_chart.png",
+        ),
+        "chart_expander_title": "📊 Διαγράμματα",
+        "chart_caption": "Δειγματοληψία λίμνης",
+        "has_chl": False,
+    },
+    {
+        "key":   "color",
+        "label": "COLOR",
+        "label_full": "COLOR",
+        "icon":  "🧫",
+        "folders": [GADOURA_ROOT / "Color" / "GeoTIFFs"],
+        "chart_image": _resolve_optional_asset(
+            DATA_ROOT / "charts_color" / "lake_sampling_chart.png",
+            GADOURA_ROOT / "Color" / "lake_sampling_chart.png",
         ),
         "chart_expander_title": "📊 Διαγράμματα",
         "chart_caption": "Δειγματοληψία λίμνης",

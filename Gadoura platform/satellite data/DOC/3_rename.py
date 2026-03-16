@@ -54,6 +54,14 @@ for index, row in df.iterrows():
             print(f"Skipping row {index + 2} due to missing date information.")
             continue
 
+        try:
+            year = int(row['Year'])
+            month = int(row['Month'])
+            day = int(row['Day'])
+        except (TypeError, ValueError):
+            print(f"Skipping row {index + 2} because OCR did not return a valid date.")
+            continue
+
         # ======================================================================
         # ===== THIS IS THE UPDATED LINE =======================================
         # ======================================================================
@@ -62,7 +70,7 @@ for index, row in df.iterrows():
         
         # Construct the new filename (e.g., 2024_07_11.jpg)
         # zfill(2) ensures month and day are two digits (e.g., 07 instead of 7)
-        base_name = f"{int(row['Year'])}_{str(int(row['Month'])).zfill(2)}_{str(int(row['Day'])).zfill(2)}.jpg"
+        base_name = f"{year}_{str(month).zfill(2)}_{str(day).zfill(2)}.jpg"
         
         # Create the full old and new file paths
         old_path = os.path.join(folder_path, old_name)
