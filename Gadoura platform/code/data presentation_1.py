@@ -7,9 +7,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from plotly.colors import sample_colorscale
 import pydeck as pdk
+import fitz  # type: ignore
 import re
-import base64
-import streamlit.components.v1 as components
 from pathlib import Path
 from io import BytesIO
 import time
@@ -196,6 +195,20 @@ def _read_binary_file(path: str) -> bytes:
     return Path(path).read_bytes()
 
 
+@st.cache_data(show_spinner=False)
+def _pdf_page_count(path: str) -> int:
+    with fitz.open(path) as doc:
+        return doc.page_count
+
+
+@st.cache_data(show_spinner=False)
+def _render_pdf_page_png(path: str, page_index: int, zoom: float = 1.8) -> bytes:
+    with fitz.open(path) as doc:
+        page = doc.load_page(page_index)
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        return pix.tobytes("png")
+
+
 def render_deliverables_view() -> None:
     st.subheader("Παραδοτέα Έργου")
     st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
@@ -239,18 +252,32 @@ def render_deliverables_view() -> None:
 
     suffix = selected_file.suffix.lower()
     if suffix == ".pdf":
-        pdf_b64 = base64.b64encode(file_bytes).decode("ascii")
-        components.html(
-            f"""
-            <div style="width:100%; height:980px; border:1px solid rgba(148,163,184,.28); border-radius:12px; overflow:hidden; background:#ffffff;">
-                <object data="data:application/pdf;base64,{pdf_b64}" type="application/pdf" width="100%" height="100%">
-                    <embed src="data:application/pdf;base64,{pdf_b64}" type="application/pdf" width="100%" height="100%" />
-                </object>
-            </div>
-            """,
-            height=1000,
-            scrolling=False,
+        try:
+            page_count = _pdf_page_count(str(selected_file))
+        except Exception as exc:
+            st.error("Αποτυχία ανάγνωσης του PDF.")
+            st.caption(f"PDF error: {exc}")
+            return
+
+        if page_count <= 0:
+            st.info("Το PDF δεν περιέχει αναγνώσιμες σελίδες.")
+            return
+
+        page_number = st.number_input(
+            "Σελίδα",
+            min_value=1,
+            max_value=page_count,
+            value=1,
+            step=1,
+            key=f"deliverable_page_{selected_file.name}",
         )
+        st.caption(f"Σελίδα {page_number} από {page_count}")
+        try:
+            page_png = _render_pdf_page_png(str(selected_file), int(page_number) - 1)
+            st.image(page_png, use_container_width=True)
+        except Exception as exc:
+            st.error("Αποτυχία απόδοσης της σελίδας του PDF.")
+            st.caption(f"PDF render error: {exc}")
     elif suffix in {".png", ".jpg", ".jpeg"}:
         st.image(file_bytes, use_container_width=True)
     else:
