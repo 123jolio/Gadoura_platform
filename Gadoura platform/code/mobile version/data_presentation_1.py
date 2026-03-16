@@ -493,7 +493,7 @@ def _depth_profiles_chart_board_png(
     fig_width = max(8.0, 4.2 * n_cols)
     fig_height = max(4.4, 3.8 * n_rows)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height), dpi=220, squeeze=False)
-    fig.patch.set_facecolor("#060d18")
+    fig.patch.set_facecolor("#ffffff")
     plt.subplots_adjust(left=0.09, right=0.985, top=0.95, bottom=0.08, wspace=0.18, hspace=0.62)
     fig.suptitle(
         "Κατακόρυφα Προφίλ",
@@ -503,7 +503,7 @@ def _depth_profiles_chart_board_png(
         va="top",
         fontsize=17,
         fontweight="bold",
-        color="#e2e8f0",
+        color="#0f172a",
         fontfamily="DejaVu Sans",
     )
 
@@ -526,7 +526,7 @@ def _depth_profiles_chart_board_png(
                     transform=ax.transAxes,
                     fontsize=10.5,
                     fontweight="bold",
-                    color="#e2e8f0",
+                    color="#0f172a",
                     ha="left",
                     va="center",
                     clip_on=False,
