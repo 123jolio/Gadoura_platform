@@ -142,9 +142,8 @@ APP_SECONDARY_LOGO_PATH = next(
     (
         path
         for path in [
-            APP_DIR / "logo.jpg",
-            PLATFORM_ROOT / "logo.jpg",
-            PLATFORM_ROOT.parent / "logo.jpg",
+            PLATFORM_ROOT / "eyath_services.png",
+            APP_DIR / "eyath_services.png",
         ]
         if path.exists()
     ),
