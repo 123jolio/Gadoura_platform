@@ -5074,8 +5074,9 @@ with tab_alarm:
     else:
         st.markdown("#### Όρια Alarm ανά Παράμετρο")
         alarm_rules = {}
-        for p in selected_alarm_params:
+        for p_idx, p in enumerate(selected_alarm_params):
             safe_key = re.sub(r"[^0-9a-zA-Z_]+", "_", p)
+            safe_key = f"{p_idx}_{safe_key}"
             default_mode, default_thr = alarm_default_rules.get(p, (">", 0.0))
             rc1, rc2, rc3 = st.columns([2.3, 1.3, 1.1])
             with rc1:
