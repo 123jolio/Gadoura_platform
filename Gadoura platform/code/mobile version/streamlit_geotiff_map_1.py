@@ -108,6 +108,18 @@ def _image_data_uri(path: Path) -> str:
     return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
 
 
+def _resolve_optional_asset(*candidates: Path) -> Path:
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 CASE_CONFIG = [
     {
         "key":   "level",
@@ -153,7 +165,7 @@ CASE_CONFIG = [
         "icon":  "🧫",
         "folders": [],
         "has_chl": False,
-        "children": ["cya"],
+        "children": ["cya", "cdom"],
     },
     {
         "key":   "cya",
@@ -161,6 +173,26 @@ CASE_CONFIG = [
         "label_full": "Cya (Se2WaQ)",
         "icon":  "🧫",
         "folders": [GADOURA_ROOT / "Cya" / "GeoTIFFs"],
+        "chart_image": _resolve_optional_asset(
+            DATA_ROOT / "charts_cya" / "lake_sampling_chart.png",
+            GADOURA_ROOT / "Cya" / "lake_sampling_chart.png",
+        ),
+        "chart_expander_title": "📊 Διαγράμματα",
+        "chart_caption": "Δειγματοληψία λίμνης",
+        "has_chl": False,
+    },
+    {
+        "key":   "cdom",
+        "label": "CDOM",
+        "label_full": "CDOM",
+        "icon":  "🧫",
+        "folders": [GADOURA_ROOT / "CDOM" / "GeoTIFFs"],
+        "chart_image": _resolve_optional_asset(
+            DATA_ROOT / "charts_cdom" / "lake_sampling_chart.png",
+            GADOURA_ROOT / "CDOM" / "lake_sampling_chart.png",
+        ),
+        "chart_expander_title": "📊 Διαγράμματα",
+        "chart_caption": "Δειγματοληψία λίμνης",
         "has_chl": False,
     },
     {
@@ -1309,6 +1341,18 @@ def render_satellite_dashboard(
             section_turbidity()
 
     # ── Footer ───────────────────────────────────────────────────────────────
+    if cfg.get("chart_image"):
+        with st.expander(cfg.get("chart_expander_title", "📊 Διαγράμματα"), expanded=False):
+            chart_image = Path(cfg["chart_image"])
+            if chart_image.exists():
+                st.image(
+                    str(chart_image),
+                    caption=cfg.get("chart_caption"),
+                    use_container_width=True,
+                )
+            else:
+                st.info("Δεν βρέθηκε διαθέσιμο διάγραμμα για αυτή την ενότητα.")
+
     if show_footer:
         st.markdown(
             "<div style='text-align:center;margin-top:3rem;font-size:.68rem;"
