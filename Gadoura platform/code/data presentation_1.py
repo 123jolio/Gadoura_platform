@@ -8,6 +8,7 @@ from plotly.subplots import make_subplots
 from plotly.colors import sample_colorscale
 import pydeck as pdk
 import re
+import base64
 from pathlib import Path
 from io import BytesIO
 import time
@@ -114,6 +115,7 @@ def _resolve_platform_root(app_dir: Path) -> Path:
 PLATFORM_ROOT = _resolve_platform_root(APP_DIR)
 FIELD_DATA_ROOT = PLATFORM_ROOT / "field data"
 SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
+DELIVERABLES_ROOT = PLATFORM_ROOT / "Παραδοτέα"
 SHARED_DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
 if not SHARED_DATA_ROOT.exists():
     legacy_data_root = PLATFORM_ROOT / "DATA"
@@ -181,6 +183,77 @@ def render_satellite_data_view(app_variant: str = "desktop") -> None:
     except Exception as exc:
         st.error("Αποτυχία προβολής δορυφορικών δεδομένων.")
         st.caption(f"Render error: {exc}")
+
+
+def _deliverable_sort_key(path: Path):
+    match = re.search(r"(\d+)", path.stem)
+    return (int(match.group(1)) if match else 10_000, path.name.lower())
+
+
+@st.cache_data(show_spinner=False)
+def _read_binary_file(path: str) -> bytes:
+    return Path(path).read_bytes()
+
+
+def render_deliverables_view() -> None:
+    st.subheader("Παραδοτέα Έργου")
+    st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
+
+    if not DELIVERABLES_ROOT.exists():
+        st.error(f"Δεν βρέθηκε ο φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
+        return
+
+    deliverable_files = sorted(
+        [path for path in DELIVERABLES_ROOT.iterdir() if path.is_file()],
+        key=_deliverable_sort_key,
+    )
+    if not deliverable_files:
+        st.info("Δεν βρέθηκαν διαθέσιμα παραδοτέα.")
+        return
+
+    selected_file = st.selectbox(
+        "Επιλέξτε παραδοτέο",
+        options=deliverable_files,
+        format_func=lambda path: path.name,
+        key="deliverable_file_selector",
+    )
+
+    file_bytes = _read_binary_file(str(selected_file))
+    file_size_mb = len(file_bytes) / (1024 * 1024)
+
+    info_col, meta_col, action_col = st.columns([3, 1.4, 1.6])
+    with info_col:
+        st.markdown(f"### {selected_file.stem}")
+    with meta_col:
+        st.caption(f"Μέγεθος: {file_size_mb:.2f} MB")
+    with action_col:
+        st.download_button(
+            "Λήψη αρχείου",
+            data=file_bytes,
+            file_name=selected_file.name,
+            mime="application/pdf" if selected_file.suffix.lower() == ".pdf" else "application/octet-stream",
+            use_container_width=True,
+            key=f"download_{selected_file.name}",
+        )
+
+    suffix = selected_file.suffix.lower()
+    if suffix == ".pdf":
+        pdf_b64 = base64.b64encode(file_bytes).decode("ascii")
+        st.markdown(
+            f"""
+            <iframe
+                src="data:application/pdf;base64,{pdf_b64}"
+                width="100%"
+                height="980"
+                style="border:1px solid rgba(148,163,184,.28); border-radius:12px; background:#ffffff;"
+            ></iframe>
+            """,
+            unsafe_allow_html=True,
+        )
+    elif suffix in {".png", ".jpg", ".jpeg"}:
+        st.image(file_bytes, use_container_width=True)
+    else:
+        st.info("Υποστηρίζεται preview για PDF και εικόνες. Για αυτό το αρχείο χρησιμοποιήστε λήψη.")
 
 # ─── Sampling point coordinates (from docx) ───────────────────────────────────
 SAMPLING_POINTS = {
@@ -568,7 +641,7 @@ if not selected_app_variant_label:
 
 selected_app_variant = "mobile" if selected_app_variant_label.startswith("Mobile") else "desktop"
 
-MAIN_VIEW_OPTIONS = ["Δορυφορικά δεδομένα", "Μετρήσεις πεδίου"]
+MAIN_VIEW_OPTIONS = ["Δορυφορικά δεδομένα", "Μετρήσεις πεδίου", "Παραδοτέα Έργου"]
 try:
     selected_main_view = st.segmented_control(
         "Προβολή",
@@ -591,6 +664,10 @@ if not selected_main_view:
 
 if selected_main_view == "Δορυφορικά δεδομένα":
     render_satellite_data_view(app_variant=selected_app_variant)
+    st.stop()
+
+if selected_main_view == "Παραδοτέα Έργου":
+    render_deliverables_view()
     st.stop()
 
 _use_light_plot_theme()
