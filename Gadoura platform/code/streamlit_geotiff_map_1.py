@@ -37,6 +37,7 @@ def _resolve_platform_root(app_dir: Path) -> Path:
     return app_dir
 
 PLATFORM_ROOT = _resolve_platform_root(APP_DIR)
+CODE_EXEC_PATH = (PLATFORM_ROOT / "code").resolve()
 SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
 DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
 
@@ -227,6 +228,31 @@ html, body, [data-testid="stApp"] {
     font-weight:700;
     letter-spacing:.08em;
     margin-top:.45rem;
+}
+.pathbox{
+    margin-top:.8rem;
+    padding:.7rem .9rem;
+    border:1px solid rgba(56,189,248,.18);
+    border-radius:12px;
+    background:rgba(8,25,41,.72);
+    max-width:100%;
+}
+.pathbox .label{
+    display:block;
+    font-size:.62rem;
+    font-weight:700;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:#5a9dc0;
+}
+.pathbox code{
+    display:block;
+    margin-top:.28rem;
+    font-family:Consolas,"Courier New",monospace;
+    font-size:.76rem;
+    color:#d7f4ff;
+    white-space:pre-wrap;
+    word-break:break-all;
 }
 
 /* ─── Section label ───────────────────────────────────────────────── */
@@ -1070,6 +1096,10 @@ def render_satellite_dashboard(
                         Ταμιευτήρα Γαδουρά &nbsp;·&nbsp; ΕΥΑΘ ΑΕ</h1>
                     <div class="sub">Οπτικοποίηση δορυφορικών GeoTIFF &amp; επικυρωμένων μετρήσεων in-situ</div>
                     <span class="badge">🛰️ Sentinel-2 · Rhodes, GR</span>
+                    <div class="pathbox">
+                      <span class="label">EXE Path</span>
+                      <code>{CODE_EXEC_PATH}</code>
+                    </div>
                   </div>
                 </div>""",
             unsafe_allow_html=True,

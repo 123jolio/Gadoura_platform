@@ -37,6 +37,7 @@ def _resolve_platform_root(app_dir: Path) -> Path:
     return app_dir
 
 PLATFORM_ROOT = _resolve_platform_root(APP_DIR)
+CODE_EXEC_PATH = (PLATFORM_ROOT / "code").resolve()
 SATELLITE_DATA_ROOT = PLATFORM_ROOT / "satellite data"
 DATA_ROOT = SATELLITE_DATA_ROOT / "DATA"
 
@@ -194,6 +195,9 @@ html,body,[data-testid="stApp"]{background:var(--bg)!important;color:var(--tx)!i
 .hcard h1{font-family:var(--fh)!important;font-size:1.45rem!important;font-weight:700!important;color:#f0faff!important;margin:0 0 .35rem 0!important;line-height:1.3!important;letter-spacing:-.02em!important;}
 .hcard .sub{font-size:.72rem;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;font-weight:500;}
 .badge{display:inline-flex;align-items:center;gap:.4rem;background:var(--acd);border:1px solid var(--abdr);color:var(--ac);border-radius:99px;padding:.22rem .9rem;font-family:var(--fh);font-size:.65rem;font-weight:600;letter-spacing:.05em;margin-top:.5rem;}
+.pathbox{margin-top:.8rem;padding:.72rem .9rem;border:1px solid var(--abdr);border-radius:12px;background:rgba(8,25,41,.72);max-width:100%;}
+.pathbox .label{display:block;font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);}
+.pathbox code{display:block;margin-top:.28rem;font-family:Consolas,"Courier New",monospace;font-size:.72rem;color:#d7f4ff;white-space:pre-wrap;word-break:break-all;}
 
 .slabel{font-family:var(--fh);font-size:.6rem;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:.75rem;padding-left:.15rem;}
 
@@ -1066,6 +1070,10 @@ def render_satellite_dashboard(
                         Ταμιευτήρα Γαδουρά &nbsp;·&nbsp; ΕΥΑΘ ΑΕ</h1>
                     <div class="sub">Οπτικοποίηση δορυφορικών GeoTIFF &amp; επικυρωμένων μετρήσεων in-situ</div>
                     <span class="badge">🛰️ Sentinel-2 · Rhodes, GR</span>
+                    <div class="pathbox">
+                      <span class="label">EXE Path</span>
+                      <code>{CODE_EXEC_PATH}</code>
+                    </div>
                   </div>
                 </div>""",
             unsafe_allow_html=True,

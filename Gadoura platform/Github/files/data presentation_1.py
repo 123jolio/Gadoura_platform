@@ -2710,7 +2710,7 @@ with tab_depth:
                     st.info("Δεν υπάρχουν δεδομένα για αυτή τη συνδυαστική επιλογή.")
                     continue
                 
-                n_cols = min(3, len(profile_params))
+                n_cols = min(2, len(profile_params))
                 cols = st.columns(n_cols)
                 
                 for i, param in enumerate(profile_params):
@@ -2725,9 +2725,9 @@ with tab_depth:
                             fig_p.add_trace(go.Scatter(
                                 x=psub[param], y=psub["depth_m"],
                                 mode="lines+markers",
-                                name=f"Σημείο {int(pt)}",
-                                line=dict(color=clr, width=2.2),
-                                marker=dict(size=7, color=clr, line=dict(width=1.2, color="#cfd8e3")),
+                                name=f"Σ{int(pt)}",
+                                line=dict(color=clr, width=2.0),
+                                marker=dict(size=6, color=clr, line=dict(width=1.0, color="#ffffff")),
                             ))
                     else:
                         psub = sub[["depth_m", param]].dropna().sort_values("depth_m")
@@ -2736,54 +2736,66 @@ with tab_depth:
                         fig_p.add_trace(go.Scatter(
                             x=psub[param], y=psub["depth_m"],
                             mode="lines+markers",
-                            name=f"Σημείο {sel_point_dp}",
-                            line=dict(color="#2e86c1", width=2.5),
-                            marker=dict(size=9, color="#1a5276", line=dict(width=1.5, color="#cfd8e3")),
-                            fill="tozerox",
-                            fillcolor="rgba(46,134,193,0.1)"
+                            name=f"Σ{sel_point_dp}",
+                            line=dict(color="#2e86c1", width=2.1),
+                            marker=dict(size=7, color="#1a5276", line=dict(width=1.2, color="#ffffff")),
                         ))
                     
                     if len(fig_p.data) == 0:
                         continue
                     fig_p.update_layout(
-                        title=dict(text=f"<b>{param}</b>", font=dict(size=13), x=0.5),
                         xaxis=dict(side="bottom"),
                         yaxis=dict(title="Βάθος (m)", autorange="reversed"),
-                        height=400,
-                        plot_bgcolor=_PLT_BG,
-                        paper_bgcolor=_PLT_PAPER,
-                        font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                        height=440,
+                        plot_bgcolor="#ffffff",
+                        paper_bgcolor="#ffffff",
+                        font=dict(color="#334155", family="Plus Jakarta Sans, sans-serif"),
                         legend=dict(
                             orientation="h",
                             yanchor="bottom",
-                            y=1.14,
-                            xanchor="center",
-                            x=0.5,
-                            font=dict(size=11),
-                            bgcolor="rgba(13,30,47,.85)",
-                            bordercolor="rgba(6,214,240,.2)",
-                            borderwidth=1
+                            y=1.01,
+                            xanchor="left",
+                            x=0,
+                            font=dict(size=10, color="#64748b"),
+                            bgcolor="rgba(255,255,255,0)",
+                            borderwidth=0
                         ),
-                        margin=dict(t=110, b=44, l=60, r=20)
+                        hoverlabel=dict(
+                            bgcolor="#ffffff",
+                            font_color="#0f172a",
+                            bordercolor="#cbd5e1"
+                        ),
+                        margin=dict(t=22, b=40, l=58, r=18)
                     )
                     fig_p.update_xaxes(
                         title_text=None,
                         side="bottom",
                         showgrid=True,
-                        gridcolor=_PLT_GRID,
-                        linecolor=_PLT_LINE,
-                        tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-                        title_font=dict(color=_PLT_TICK)
+                        gridcolor="rgba(148,163,184,0.22)",
+                        linecolor="rgba(148,163,184,0.5)",
+                        tickfont=dict(color="#334155", family="Plus Jakarta Sans, sans-serif"),
+                        title_font=dict(color="#0f172a"),
+                        automargin=True
                     )
                     fig_p.update_yaxes(
                         showgrid=True,
-                        gridcolor=_PLT_GRID,
-                        linecolor=_PLT_LINE,
-                        tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-                        title_font=dict(color=_PLT_TICK)
+                        gridcolor="rgba(148,163,184,0.22)",
+                        linecolor="rgba(148,163,184,0.5)",
+                        tickfont=dict(color="#334155", family="Plus Jakarta Sans, sans-serif"),
+                        title_font=dict(color="#0f172a"),
+                        automargin=True
                     )
                     with cols[i % n_cols]:
-                        st.plotly_chart(fig_p, use_container_width=True, theme=None)
+                        st.markdown(
+                            f"<div style='margin:0 0 .4rem .15rem;font-family:Plus Jakarta Sans, sans-serif;font-size:1rem;font-weight:700;color:#e6f0fb;'>{param}</div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.plotly_chart(
+                            fig_p,
+                            use_container_width=True,
+                            theme=None,
+                            config={"displayModeBar": False},
+                        )
                 
                 if row_idx < len(dates_sorted) - 1:
                     st.markdown("---")
