@@ -5039,177 +5039,239 @@ with tab_compare:
 # ══════════════════════════════════════════════════════════════
 with tab_alarm:
     st.subheader("Alarm Παραμέτρων (Μετρήσεις Πεδίου)")
-    st.caption("Έλεγχος υπερβάσεων/υποβάσεων ορίων ανά παράμετρο, σημείο και βάθος.")
+    st.caption("Επίσημα όρια (EU 2020/2184) + επιχειρησιακά thresholds για τα δεδομένα πεδίου Γαδουρά.")
 
     alarm_available_params = [p for p in COL_MAP if df[p].notna().any()]
-    alarm_default_rules = {
-        "Θερμοκρασία (°C)": (">", 25.0),
-        "Διαλυμένο Οξυγόνο DO (mg/L)": ("<", 2.0),
-        "pH": (">", 8.5),
-        "Αγωγιμότητα (μS/cm)": (">", 650.0),
-        "Χλωροφύλλη-α (μg/L)": (">", 15.0),
-        "TOC (mg/L)": (">", 5.0),
-        "Mn²⁺ (mg/L)": (">", 0.05),
-        "NH4⁺ (mg/L)": (">", 0.2),
-        "Θολότητα-Εργαστήριο (NTU)": (">", 10.0),
-        "Θολότητα-Πεδίο (NTU)": (">", 10.0),
-    }
+    alarm_rule_catalog = [
+        {"id": "ph_low", "parameter": "pH", "mode": "<", "threshold": 6.5, "severity": "critical", "category": "official", "source": "EU 2020/2184"},
+        {"id": "ph_high", "parameter": "pH", "mode": ">", "threshold": 9.5, "severity": "critical", "category": "official", "source": "EU 2020/2184"},
+        {"id": "cond_high", "parameter": "Αγωγιμότητα (μS/cm)", "mode": ">", "threshold": 2500.0, "severity": "critical", "category": "official", "source": "EU 2020/2184"},
+        {"id": "mn_high", "parameter": "Mn²⁺ (mg/L)", "mode": ">", "threshold": 0.050, "severity": "critical", "category": "official", "source": "EU 2020/2184"},
+        {"id": "fe_high", "parameter": "Fe²⁺ (mg/L)", "mode": ">", "threshold": 0.200, "severity": "critical", "category": "official", "source": "EU 2020/2184"},
+        {"id": "no3_high", "parameter": "NO3⁻ (mg/L)", "mode": ">", "threshold": 50.0, "severity": "critical", "category": "official", "source": "EU 2020/2184"},
+        {"id": "nh4_critical", "parameter": "NH4⁺ (mg/L)", "mode": ">", "threshold": 0.50, "severity": "critical", "category": "official", "source": "EU 2020/2184"},
+        {"id": "nh4_warning", "parameter": "NH4⁺ (mg/L)", "mode": ">", "threshold": 0.20, "severity": "warning", "category": "operational", "source": "Operational (Gadoura)"},
+        {"id": "do_low", "parameter": "Διαλυμένο Οξυγόνο DO (mg/L)", "mode": "<", "threshold": 2.0, "severity": "critical", "category": "operational", "source": "Operational (limnology)"},
+        {"id": "temp_high", "parameter": "Θερμοκρασία (°C)", "mode": ">", "threshold": 15.0, "severity": "warning", "category": "operational", "source": "Operational (Gadoura)"},
+        {"id": "chla_high", "parameter": "Χλωροφύλλη-α (μg/L)", "mode": ">", "threshold": 15.0, "severity": "warning", "category": "operational", "source": "Operational (Gadoura)"},
+        {"id": "toc_high", "parameter": "TOC (mg/L)", "mode": ">", "threshold": 5.0, "severity": "warning", "category": "operational", "source": "Operational (Gadoura)"},
+        {"id": "secchi_low", "parameter": "Δίσκος Secchi (m)", "mode": "<", "threshold": 3.0, "severity": "warning", "category": "operational", "source": "Operational (Gadoura)"},
+        {"id": "turb_field_high", "parameter": "Θολότητα-Πεδίο (NTU)", "mode": ">", "threshold": 10.0, "severity": "warning", "category": "operational", "source": "Operational (Gadoura)"},
+        {"id": "turb_lab_high", "parameter": "Θολότητα-Εργαστήριο (NTU)", "mode": ">", "threshold": 10.0, "severity": "warning", "category": "operational", "source": "Operational (Gadoura)"},
+        {"id": "turb_treated_warn", "parameter": "Θολότητα-Εργαστήριο (NTU)", "mode": ">", "threshold": 0.3, "severity": "warning", "category": "official_process", "source": "EU 2020/2184 (treated water)"},
+        {"id": "turb_treated_critical", "parameter": "Θολότητα-Εργαστήριο (NTU)", "mode": ">", "threshold": 1.0, "severity": "critical", "category": "official_process", "source": "EU 2020/2184 (treated water)"},
+    ]
+    visible_rules = [r for r in alarm_rule_catalog if r["parameter"] in alarm_available_params]
 
-    ac1, ac2 = st.columns(2)
-    with ac1:
-        alarm_date_filter = st.multiselect(
-            "Ημερομηνίες",
-            options=dates,
-            default=dates,
-            format_func=lambda d: d.strftime("%d/%m/%Y"),
-            key="alarm_dates",
-        )
-    with ac2:
-        alarm_point_filter = st.multiselect(
-            "Σημεία",
-            options=sorted(df["point"].unique()),
-            default=sorted(df["point"].unique()),
-            format_func=lambda x: f"Σημείο {x}",
-            key="alarm_points",
-        )
-
-    selected_alarm_params = st.multiselect(
-        "Παράμετροι για έλεγχο alarm",
-        options=alarm_available_params,
-        default=[p for p in ["Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)", "pH", "Θερμοκρασία (°C)"] if p in alarm_available_params],
-        key="alarm_params_selected",
-    )
-
-    if not alarm_date_filter or not alarm_point_filter:
-        st.info("Επίλεξε τουλάχιστον μία ημερομηνία και ένα σημείο.")
-    elif not selected_alarm_params:
-        st.info("Επίλεξε τουλάχιστον μία παράμετρο για έλεγχο.")
+    if not visible_rules:
+        st.info("Δεν βρέθηκαν διαθέσιμες παράμετροι για έλεγχο alarm.")
     else:
-        st.markdown("#### Όρια Alarm ανά Παράμετρο")
-        alarm_rules = {}
-        for p_idx, p in enumerate(selected_alarm_params):
-            safe_key = re.sub(r"[^0-9a-zA-Z_]+", "_", p)
-            safe_key = f"{p_idx}_{safe_key}"
-            default_mode, default_thr = alarm_default_rules.get(p, (">", 0.0))
-            rc1, rc2, rc3 = st.columns([2.3, 1.3, 1.1])
+        profile = st.radio(
+            "Προφίλ Ορίων",
+            options=[
+                "Υβριδικό (Επίσημα + Γαδουρά)",
+                "Μόνο Επίσημα (EU)",
+                "Μόνο Λειτουργικά (Γαδουρά)",
+                "Custom",
+            ],
+            horizontal=True,
+            key="alarm_profile",
+        )
+
+        def _profile_enabled(category: str, current_profile: str) -> bool:
+            if current_profile == "Μόνο Επίσημα (EU)":
+                return category == "official"
+            if current_profile == "Μόνο Λειτουργικά (Γαδουρά)":
+                return category == "operational"
+            if current_profile == "Υβριδικό (Επίσημα + Γαδουρά)":
+                return category in {"official", "operational"}
+            return category in {"official", "operational"}
+
+        reset_col, _ = st.columns([1.2, 5])
+        with reset_col:
+            if st.button("Επαναφορά προφίλ", key="alarm_reset_profile"):
+                for rule in visible_rules:
+                    en_key = f"alarm_rule_enabled_{rule['id']}"
+                    thr_key = f"alarm_rule_threshold_{rule['id']}"
+                    st.session_state[en_key] = _profile_enabled(rule["category"], profile)
+                    st.session_state[thr_key] = float(rule["threshold"])
+                st.rerun()
+
+        f1, f2 = st.columns(2)
+        with f1:
+            alarm_date_filter = st.multiselect(
+                "Ημερομηνίες",
+                options=dates,
+                default=dates,
+                format_func=lambda d: d.strftime("%d/%m/%Y"),
+                key="alarm_dates",
+            )
+        with f2:
+            alarm_point_filter = st.multiselect(
+                "Σημεία",
+                options=sorted(df["point"].unique()),
+                default=sorted(df["point"].unique()),
+                format_func=lambda x: f"Σημείο {x}",
+                key="alarm_points",
+            )
+
+        st.markdown("#### Κανόνες Alarm")
+        st.caption("Ενεργοποίησε/ρύθμισε τα όρια. Για pH υπάρχουν ξεχωριστά low/high alarms.")
+
+        active_rules = []
+        for rule in visible_rules:
+            en_key = f"alarm_rule_enabled_{rule['id']}"
+            thr_key = f"alarm_rule_threshold_{rule['id']}"
+            if en_key not in st.session_state:
+                st.session_state[en_key] = _profile_enabled(rule["category"], profile)
+            if thr_key not in st.session_state:
+                st.session_state[thr_key] = float(rule["threshold"])
+
+            rc1, rc2, rc3, rc4, rc5, rc6 = st.columns([0.8, 2.2, 0.7, 1.2, 1.0, 2.2])
             with rc1:
-                mode = st.selectbox(
-                    f"{p} — Συνθήκη",
-                    options=[">", "<"],
-                    index=0 if default_mode == ">" else 1,
-                    key=f"alarm_mode_{safe_key}",
-                )
+                enabled = st.checkbox(" ", value=bool(st.session_state[en_key]), key=en_key, label_visibility="collapsed")
             with rc2:
-                threshold = st.number_input(
-                    f"{p} — Όριο",
-                    value=float(default_thr),
+                st.write(f"`{rule['parameter']}`")
+            with rc3:
+                st.write(f"`{rule['mode']}`")
+            with rc4:
+                thr = st.number_input(
+                    f"thr_{rule['id']}",
+                    value=float(st.session_state[thr_key]),
                     step=0.01,
                     format="%.3f",
-                    key=f"alarm_threshold_{safe_key}",
+                    key=thr_key,
+                    label_visibility="collapsed",
                 )
-            with rc3:
-                enabled = st.checkbox("Ενεργό", value=True, key=f"alarm_enabled_{safe_key}")
+            with rc5:
+                sev_tag = "CRIT" if rule["severity"] == "critical" else "WARN"
+                st.write(f"`{sev_tag}`")
+            with rc6:
+                st.caption(rule["source"])
+
             if enabled:
-                alarm_rules[p] = (mode, float(threshold))
-
-        alarm_src = df[df["date"].isin(alarm_date_filter) & df["point"].isin(alarm_point_filter)].copy()
-        alarm_rows = []
-        for p, (mode, threshold) in alarm_rules.items():
-            if p not in alarm_src.columns:
-                continue
-            values = pd.to_numeric(alarm_src[p], errors="coerce")
-            if mode == ">":
-                mask = values > threshold
-                delta = values - threshold
-            else:
-                mask = values < threshold
-                delta = threshold - values
-
-            if mask.any():
-                part = alarm_src.loc[mask, ["date", "point", "depth", p]].copy()
-                part = part.rename(columns={p: "Τιμή"})
-                part["Παράμετρος"] = p
-                part["Συνθήκη"] = f"{mode} {threshold:.3f}"
-                part["Απόκλιση"] = delta.loc[mask]
-                alarm_rows.append(part)
-
-        if not alarm_rows:
-            st.success("Δεν βρέθηκαν alarm για τα τρέχοντα όρια.")
-        else:
-            alarms_df = pd.concat(alarm_rows, ignore_index=True)
-            alarms_df["date"] = pd.to_datetime(alarms_df["date"], errors="coerce")
-            alarms_df = alarms_df.sort_values(["date", "Παράμετρος", "point", "depth"], ascending=[False, True, True, True])
-            alarms_df["Ημερομηνία"] = alarms_df["date"].dt.strftime("%d/%m/%Y")
-            alarms_df["Τιμή"] = pd.to_numeric(alarms_df["Τιμή"], errors="coerce")
-            alarms_df["Απόκλιση"] = pd.to_numeric(alarms_df["Απόκλιση"], errors="coerce")
-
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Σύνολο Alarm", f"{len(alarms_df)}")
-            m2.metric("Παράμετροι με Alarm", f"{alarms_df['Παράμετρος'].nunique()}")
-            m3.metric("Ημερομηνίες με Alarm", f"{alarms_df['date'].nunique()}")
-            last_alarm_date = alarms_df["date"].max()
-            m4.metric("Τελευταίο Alarm", last_alarm_date.strftime("%d/%m/%Y") if pd.notna(last_alarm_date) else "—")
-
-            summary_alarm = (
-                alarms_df.groupby("Παράμετρος")
-                .agg(
-                    Συναγερμοί=("Τιμή", "count"),
-                    Μέση_Τιμή=("Τιμή", "mean"),
-                    Μέγιστη_Απόκλιση=("Απόκλιση", "max"),
+                active_rules.append(
+                    {
+                        "id": rule["id"],
+                        "parameter": rule["parameter"],
+                        "mode": rule["mode"],
+                        "threshold": float(thr),
+                        "severity": rule["severity"],
+                        "source": rule["source"],
+                    }
                 )
-                .reset_index()
-                .sort_values("Συναγερμοί", ascending=False)
-            )
-            summary_alarm = summary_alarm.rename(columns={"Μέση_Τιμή": "Μέση Τιμή", "Μέγιστη_Απόκλιση": "Μέγιστη Απόκλιση"})
 
-            st.markdown("#### Σύνοψη Alarm ανά Παράμετρο")
-            st.dataframe(summary_alarm, use_container_width=True, hide_index=True)
+        if not alarm_date_filter or not alarm_point_filter:
+            st.info("Επίλεξε τουλάχιστον μία ημερομηνία και ένα σημείο.")
+        elif not active_rules:
+            st.info("Δεν υπάρχουν ενεργοί κανόνες alarm.")
+        else:
+            alarm_src = df[df["date"].isin(alarm_date_filter) & df["point"].isin(alarm_point_filter)].copy()
+            alarm_rows = []
+            for rule in active_rules:
+                p = rule["parameter"]
+                mode = rule["mode"]
+                threshold = float(rule["threshold"])
+                values = pd.to_numeric(alarm_src[p], errors="coerce")
+                if mode == ">":
+                    mask = values > threshold
+                    delta = values - threshold
+                else:
+                    mask = values < threshold
+                    delta = threshold - values
 
-            fig_alarm = px.bar(
-                summary_alarm,
-                x="Παράμετρος",
-                y="Συναγερμοί",
-                color="Συναγερμοί",
-                color_continuous_scale="Reds",
-                text_auto=True,
-                height=360,
-                title="Πλήθος Alarm ανά Παράμετρο",
-            )
-            fig_alarm.update_layout(
-                plot_bgcolor=_PLT_BG,
-                paper_bgcolor=_PLT_PAPER,
-                font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-            )
-            fig_alarm.update_xaxes(
-                showgrid=False,
-                linecolor=_PLT_LINE,
-                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-            )
-            fig_alarm.update_yaxes(
-                showgrid=True,
-                gridcolor=_PLT_GRID,
-                linecolor=_PLT_LINE,
-                tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-                title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
-            )
-            st.plotly_chart(fig_alarm, use_container_width=True, theme=None)
+                if mask.any():
+                    part = alarm_src.loc[mask, ["date", "point", "depth", p]].copy()
+                    part = part.rename(columns={p: "Τιμή", "point": "Σημείο", "depth": "Βάθος"})
+                    part["Παράμετρος"] = p
+                    part["Συνθήκη"] = f"{mode} {threshold:.3f}"
+                    part["Severity"] = rule["severity"]
+                    part["Πηγή Ορίου"] = rule["source"]
+                    part["Απόκλιση"] = pd.to_numeric(delta.loc[mask], errors="coerce")
+                    alarm_rows.append(part)
 
-            st.markdown("#### Αναλυτικός Πίνακας Alarm")
-            alarms_view = alarms_df.rename(columns={"point": "Σημείο", "depth": "Βάθος"})[
-                ["Ημερομηνία", "Σημείο", "Βάθος", "Παράμετρος", "Τιμή", "Συνθήκη", "Απόκλιση"]
-            ]
-            st.dataframe(alarms_view, use_container_width=True, hide_index=True, height=430)
+            if not alarm_rows:
+                st.success("Δεν βρέθηκαν alarm για τα τρέχοντα όρια.")
+            else:
+                alarms_df = pd.concat(alarm_rows, ignore_index=True)
+                alarms_df["date"] = pd.to_datetime(alarms_df["date"], errors="coerce")
+                alarms_df["Ημερομηνία"] = alarms_df["date"].dt.strftime("%d/%m/%Y")
+                alarms_df["Τιμή"] = pd.to_numeric(alarms_df["Τιμή"], errors="coerce")
+                alarms_df["Απόκλιση"] = pd.to_numeric(alarms_df["Απόκλιση"], errors="coerce")
+                alarms_df = alarms_df.sort_values(["date", "Severity", "Παράμετρος", "Σημείο", "Βάθος"], ascending=[False, True, True, True, True])
 
-            csv_alarm = alarms_view.to_csv(index=False).encode("utf-8-sig")
-            st.download_button(
-                "⬇️ Λήψη Alarm CSV",
-                data=csv_alarm,
-                file_name=f"field_measurement_alarms_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="alarms_csv_download",
-            )
+                total_cnt = int(len(alarms_df))
+                crit_cnt = int((alarms_df["Severity"] == "critical").sum())
+                warn_cnt = int((alarms_df["Severity"] == "warning").sum())
+                last_alarm_date = alarms_df["date"].max()
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Σύνολο Alarm", f"{total_cnt}")
+                m2.metric("Critical", f"{crit_cnt}")
+                m3.metric("Warning", f"{warn_cnt}")
+                m4.metric("Τελευταίο Alarm", last_alarm_date.strftime("%d/%m/%Y") if pd.notna(last_alarm_date) else "—")
+
+                summary_alarm = (
+                    alarms_df.groupby(["Παράμετρος", "Severity"])
+                    .agg(
+                        Συναγερμοί=("Τιμή", "count"),
+                        Μέση_Τιμή=("Τιμή", "mean"),
+                        Μέγιστη_Απόκλιση=("Απόκλιση", "max"),
+                    )
+                    .reset_index()
+                    .sort_values(["Συναγερμοί", "Severity"], ascending=[False, True])
+                )
+                summary_alarm = summary_alarm.rename(columns={"Μέση_Τιμή": "Μέση Τιμή", "Μέγιστη_Απόκλιση": "Μέγιστη Απόκλιση"})
+
+                st.markdown("#### Σύνοψη Alarm ανά Παράμετρο")
+                st.dataframe(summary_alarm, use_container_width=True, hide_index=True)
+
+                fig_alarm = px.bar(
+                    summary_alarm,
+                    x="Παράμετρος",
+                    y="Συναγερμοί",
+                    color="Severity",
+                    barmode="group",
+                    color_discrete_map={"critical": "#ef4444", "warning": "#f59e0b"},
+                    text_auto=True,
+                    height=360,
+                    title="Πλήθος Alarm ανά Παράμετρο και Severity",
+                )
+                fig_alarm.update_layout(
+                    plot_bgcolor=_PLT_BG,
+                    paper_bgcolor=_PLT_PAPER,
+                    font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                )
+                fig_alarm.update_xaxes(
+                    showgrid=False,
+                    linecolor=_PLT_LINE,
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                )
+                fig_alarm.update_yaxes(
+                    showgrid=True,
+                    gridcolor=_PLT_GRID,
+                    linecolor=_PLT_LINE,
+                    tickfont=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                    title_font=dict(color=_PLT_TICK, family="Plus Jakarta Sans, sans-serif"),
+                )
+                st.plotly_chart(fig_alarm, use_container_width=True, theme=None)
+
+                st.markdown("#### Αναλυτικός Πίνακας Alarm")
+                alarms_view = alarms_df[
+                    ["Ημερομηνία", "Σημείο", "Βάθος", "Παράμετρος", "Τιμή", "Συνθήκη", "Severity", "Απόκλιση", "Πηγή Ορίου"]
+                ]
+                st.dataframe(alarms_view, use_container_width=True, hide_index=True, height=450)
+
+                csv_alarm = alarms_view.to_csv(index=False).encode("utf-8-sig")
+                st.download_button(
+                    "⬇️ Λήψη Alarm CSV",
+                    data=csv_alarm,
+                    file_name=f"field_measurement_alarms_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="alarms_csv_download",
+                )
 
 # ══════════════════════════════════════════════════════════════
 # TAB 5: RAW DATA
