@@ -1340,7 +1340,7 @@ def render_level_tab() -> None:
     st.plotly_chart(fig, use_container_width=True, theme=None)
 
 # ─── Top-level header and view selector ───────────────────────────────────────
-render_main_header()
+header_placeholder = st.empty()
 
 APP_VARIANT_OPTIONS = ["Desktop εφαρμογή", "Mobile εφαρμογή"]
 try:
@@ -1385,6 +1385,10 @@ except Exception:
 
 if not selected_main_view:
     selected_main_view = MAIN_VIEW_OPTIONS[0]
+
+# Shared header for all top-level views (satellite / field / deliverables)
+with header_placeholder.container():
+    render_main_header()
 
 if selected_main_view == "Δορυφορικά δεδομένα":
     render_satellite_data_view(app_variant=selected_app_variant)
@@ -4469,12 +4473,18 @@ with tab_report:
     src_corr["Mn²⁺ (mg/L)"] = pd.to_numeric(src_corr["Mn²⁺ (mg/L)"], errors="coerce")
     src_corr = src_corr.dropna(subset=["Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)"])
     if not src_corr.empty:
+        src_corr["depth_m"] = pd.to_numeric(src_corr["depth_m"], errors="coerce")
+        src_corr["date_dt"] = pd.to_datetime(src_corr["date"], errors="coerce")
+        src_corr = src_corr.dropna(subset=["depth_m", "date_dt"])
+        src_corr["date_label"] = src_corr["date_dt"].dt.strftime("%d/%m/%Y")
+        src_corr["point_label"] = src_corr["point"].map(lambda x: f"Σημείο {int(x)}" if pd.notna(x) else "—")
         try:
             fig_corr = px.scatter(
                 src_corr,
                 x="Διαλυμένο Οξυγόνο DO (mg/L)",
                 y="Mn²⁺ (mg/L)",
                 color="depth_m",
+                custom_data=["date_label", "point_label", "depth_m"],
                 color_continuous_scale="Turbo",
                 trendline="lowess",
                 labels={
@@ -4489,6 +4499,7 @@ with tab_report:
                 x="Διαλυμένο Οξυγόνο DO (mg/L)",
                 y="Mn²⁺ (mg/L)",
                 color="depth_m",
+                custom_data=["date_label", "point_label", "depth_m"],
                 color_continuous_scale="Turbo",
                 labels={
                     "Διαλυμένο Οξυγόνο DO (mg/L)": "DO (mg/L)",
@@ -4496,6 +4507,17 @@ with tab_report:
                     "depth_m": "Βάθος (m)",
                 },
             )
+        fig_corr.update_traces(
+            selector=dict(mode="markers"),
+            hovertemplate=(
+                "<b>%{customdata[1]}</b><br>"
+                "Ημερομηνία: %{customdata[0]}<br>"
+                "DO: %{x:.2f} mg/L<br>"
+                "Mn²⁺: %{y:.3f} mg/L<br>"
+                "Βάθος: %{customdata[2]:.1f} m"
+                "<extra></extra>"
+            ),
+        )
         fig_corr.add_vline(
             x=0.5,
             line_dash="dash",
