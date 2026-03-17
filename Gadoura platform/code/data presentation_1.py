@@ -2275,6 +2275,7 @@ def _build_ph_summary(df_in):
             "date": pd.to_datetime(d),
             "pH_surf": float(surf.mean()) if not surf.empty else np.nan,
             "pH_deep": float(deep.mean()) if not deep.empty else np.nan,
+            "pH_mean": float(sub["pH_n"].mean()) if sub["pH_n"].notna().any() else np.nan,
             "pH_min": float(sub["pH_n"].min()) if sub["pH_n"].notna().any() else np.nan,
             "pH_max": float(sub["pH_n"].max()) if sub["pH_n"].notna().any() else np.nan,
         })
@@ -4785,6 +4786,16 @@ with tab_report:
                 name="pH επιφάνεια (≤1m)",
                 line=dict(width=2.5, color="#22c55e"),
                 marker=dict(size=8, color="#22c55e"),
+            )
+        )
+        fig_ph.add_trace(
+            go.Scatter(
+                x=ph_df["date"],
+                y=ph_df["pH_mean"],
+                mode="lines+markers",
+                name="Μέσο pH",
+                line=dict(width=2.4, color="#2563eb"),
+                marker=dict(size=8, color="#2563eb"),
             )
         )
         fig_ph.add_trace(
