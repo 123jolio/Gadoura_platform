@@ -930,43 +930,6 @@ def _build_report_tab_pdf_bytes(
     return pdf_buffer.getvalue(), notes
 
 
-# ─────────────────────────────────────────────────────────────
-# FIGURE EXPORT HELPERS FOR PARADOTEO 7
-# ─────────────────────────────────────────────────────────────
-EXPORT_ROOT = PLATFORM_ROOT / "exported_figures_p7"
-EXPORT_ROOT.mkdir(parents=True, exist_ok=True)
-
-
-def _slugify(text: str) -> str:
-    text = str(text).strip().lower()
-    text = re.sub(r"[^\w\s.-]", "", text, flags=re.UNICODE)
-    text = re.sub(r"[\s/]+", "_", text)
-    text = re.sub(r"_+", "_", text)
-    return text.strip("_")
-
-
-def save_plotly_figure(fig: go.Figure, filename: str, width: int = 1800, height: int = 1000) -> str:
-    safe_name = _slugify(Path(filename).stem) + ".png"
-    out_path = EXPORT_ROOT / safe_name
-    try:
-        img_bytes = fig.to_image(format="png", width=width, height=height, scale=2)
-    except Exception:
-        img_bytes = _plotly_figure_to_png_fallback(fig, safe_name)
-    out_path.write_bytes(img_bytes)
-    return str(out_path)
-
-
-def save_dataframe_png(df: pd.DataFrame, filename: str, title: str = "") -> str:
-    safe_name = _slugify(Path(filename).stem) + ".png"
-    out_path = EXPORT_ROOT / safe_name
-    out_path.write_bytes(_dataframe_to_png_bytes(df, title=title))
-    return str(out_path)
-
-
-def figure_note(section_id: str, title: str, filename: str) -> str:
-    return f"{section_id} | {title} | {filename}"
-
-
 def render_deliverables_view() -> None:
     st.subheader("Παραδοτέα Έργου")
     st.caption(f"Φάκελος παραδοτέων: `{DELIVERABLES_ROOT}`")
@@ -2355,139 +2318,6 @@ def _build_nh4_summary(df_in):
             **{f"NH4 @ {k}m": round(v, 3) if pd.notna(v) else np.nan for k, v in vals.items()},
         })
     return pd.DataFrame(rows)
-
-
-def build_true_color_event_timeline():
-    events = pd.DataFrame(columns=["date", "label", "type"])
-    return events
-
-
-def build_turbidity_timeseries_by_date(df_in):
-    fig = go.Figure()
-    src = _prepare_report_source(df_in)
-    turb_col = "Θολότητα-Εργαστήριο (NTU)"
-    if turb_col not in src.columns:
-        return fig
-    vals = src.groupby("date")[turb_col].mean().reset_index()
-    vals["date"] = pd.to_datetime(vals["date"], errors="coerce")
-    vals[turb_col] = pd.to_numeric(vals[turb_col], errors="coerce")
-    vals = vals.dropna(subset=["date", turb_col]).sort_values("date")
-    if vals.empty:
-        return fig
-    fig.add_trace(
-        go.Scatter(
-            x=vals["date"],
-            y=vals[turb_col],
-            mode="lines+markers",
-            name="Θολότητα-Εργαστήριο",
-            line=dict(width=2.5, color="#2563eb"),
-        )
-    )
-    fig.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-    fig.update_yaxes(title_text="Θολότητα (NTU)")
-    return fig
-
-
-def build_chla_timeseries_by_date(df_in):
-    fig = go.Figure()
-    src = _prepare_report_source(df_in)
-    chla_col = "Χλωροφύλλη-α (μg/L)"
-    if chla_col not in src.columns:
-        return fig
-    vals = src.groupby("date")[chla_col].mean().reset_index()
-    vals["date"] = pd.to_datetime(vals["date"], errors="coerce")
-    vals[chla_col] = pd.to_numeric(vals[chla_col], errors="coerce")
-    vals = vals.dropna(subset=["date", chla_col]).sort_values("date")
-    if vals.empty:
-        return fig
-    fig.add_trace(
-        go.Scatter(
-            x=vals["date"],
-            y=vals[chla_col],
-            mode="lines+markers",
-            name="Χλωροφύλλη-α",
-            line=dict(width=2.5, color="#16a34a"),
-        )
-    )
-    fig.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-    fig.update_yaxes(title_text="Χλωροφύλλη-α (μg/L)")
-    return fig
-
-
-def build_level_timeseries():
-    lvl = load_level_data(str(SHARED_DATA_ROOT))
-    fig = go.Figure()
-    if lvl.empty:
-        return fig
-    fig.add_trace(
-        go.Scatter(
-            x=lvl["date"],
-            y=lvl["value"],
-            mode="lines",
-            name="Στάθμη",
-            line=dict(width=2.6, color="#06d6f0"),
-        )
-    )
-    fig.update_xaxes(tickformat="%d/%m/%Y", tickangle=-30)
-    fig.update_yaxes(title_text="Στάθμη (m)")
-    return fig
-
-
-def build_level_quality_scatter(df_in):
-    lvl = load_level_data(str(SHARED_DATA_ROOT))
-    fig_turb = go.Figure()
-    fig_chla = go.Figure()
-    if lvl.empty:
-        return fig_turb, fig_chla
-
-    src = _prepare_report_source(df_in)
-    required_cols = ["Θολότητα-Εργαστήριο (NTU)", "Χλωροφύλλη-α (μg/L)"]
-    if any(col not in src.columns for col in required_cols):
-        return fig_turb, fig_chla
-
-    q = src.groupby("date").agg({
-        "Θολότητα-Εργαστήριο (NTU)": "mean",
-        "Χλωροφύλλη-α (μg/L)": "mean",
-    }).reset_index()
-    q["date"] = pd.to_datetime(q["date"], errors="coerce")
-    q["Θολότητα-Εργαστήριο (NTU)"] = pd.to_numeric(q["Θολότητα-Εργαστήριο (NTU)"], errors="coerce")
-    q["Χλωροφύλλη-α (μg/L)"] = pd.to_numeric(q["Χλωροφύλλη-α (μg/L)"], errors="coerce")
-    merged = q.merge(lvl[["date", "value"]], on="date", how="inner").dropna()
-    if merged.empty:
-        return fig_turb, fig_chla
-
-    try:
-        fig_turb = px.scatter(
-            merged,
-            x="value",
-            y="Θολότητα-Εργαστήριο (NTU)",
-            labels={"value": "Στάθμη (m)", "Θολότητα-Εργαστήριο (NTU)": "Θολότητα (NTU)"},
-            trendline="ols",
-        )
-    except Exception:
-        fig_turb = px.scatter(
-            merged,
-            x="value",
-            y="Θολότητα-Εργαστήριο (NTU)",
-            labels={"value": "Στάθμη (m)", "Θολότητα-Εργαστήριο (NTU)": "Θολότητα (NTU)"},
-        )
-
-    try:
-        fig_chla = px.scatter(
-            merged,
-            x="value",
-            y="Χλωροφύλλη-α (μg/L)",
-            labels={"value": "Στάθμη (m)", "Χλωροφύλλη-α (μg/L)": "Χλωροφύλλη-α (μg/L)"},
-            trendline="ols",
-        )
-    except Exception:
-        fig_chla = px.scatter(
-            merged,
-            x="value",
-            y="Χλωροφύλλη-α (μg/L)",
-            labels={"value": "Στάθμη (m)", "Χλωροφύλλη-α (μg/L)": "Χλωροφύλλη-α (μg/L)"},
-        )
-    return fig_turb, fig_chla
 
 
 def _add_report_section_title(txt):
@@ -4356,7 +4186,6 @@ with tab_report:
     st.subheader("3.3.1. Μετρήσεις Πεδίου")
     report_pdf_tables: list[tuple[str, pd.DataFrame]] = []
     report_pdf_figures: list[tuple[str, go.Figure]] = []
-    report_doc_figure_registry = []
 
     do_kpi_df = _build_do_summary(df)
     toc_kpi_df = _build_toc_summary(df)
@@ -4487,10 +4316,6 @@ with tab_report:
         fig_temp.update_yaxes(title_text="ΔT (°C)", secondary_y=True)
         _report_plot(fig_temp, "Εξέλιξη θερμικής στρωμάτωσης", 430)
         report_pdf_figures.append(("Εξέλιξη θερμικής στρωμάτωσης", fig_temp))
-        saved = save_plotly_figure(fig_temp, "Fig_5_3_thermal_stratification.png")
-        report_doc_figure_registry.append(
-            figure_note("5.3", "Εξέλιξη θερμικής στρωμάτωσης", saved)
-        )
 
     # 3.3.3
     _add_report_section_title("3.3.3. Υπολιμνιακή Ανοξία — Διαλυτό Οξυγόνο")
@@ -4541,10 +4366,6 @@ with tab_report:
         fig_do.update_yaxes(title_text="DO (mg/L)")
         _report_plot(fig_do, "Κατακόρυφη εξέλιξη διαλυμένου οξυγόνου", 430)
         report_pdf_figures.append(("Κατακόρυφη εξέλιξη διαλυμένου οξυγόνου", fig_do))
-        saved = save_plotly_figure(fig_do, "Fig_5_4_do_profiles.png")
-        report_doc_figure_registry.append(
-            figure_note("5.4", "Κατακόρυφη εξέλιξη διαλυμένου οξυγόνου", saved)
-        )
 
     deep_points = sorted(df["point"].dropna().unique().tolist())
     if deep_points:
@@ -4567,10 +4388,6 @@ with tab_report:
             fig_hov_do.update_yaxes(autorange="reversed")
             _report_plot(fig_hov_do, f"Heatmap βάθους–χρόνου DO — Σημείο {sel_hov_point}", 420)
             report_pdf_figures.append((f"Heatmap βάθους–χρόνου DO — Σημείο {sel_hov_point}", fig_hov_do))
-            saved = save_plotly_figure(fig_hov_do, f"Fig_5_4_do_hovmoller_point_{sel_hov_point}.png")
-            report_doc_figure_registry.append(
-                figure_note("5.4", f"Heatmap βάθους–χρόνου DO — Σημείο {sel_hov_point}", saved)
-            )
 
     anox_df = _build_anoxic_zone(df)
     if not anox_df.empty:
@@ -4651,10 +4468,6 @@ with tab_report:
         fig_mn.update_yaxes(title_text="Mn²⁺ (mg/L)")
         _report_plot(fig_mn, "Βαθυμετρική εξέλιξη μαγγανίου", 430)
         report_pdf_figures.append(("Βαθυμετρική εξέλιξη μαγγανίου", fig_mn))
-        saved = save_plotly_figure(fig_mn, "Fig_5_5_mn_profiles.png")
-        report_doc_figure_registry.append(
-            figure_note("5.5", "Βαθυμετρική εξέλιξη μαγγανίου", saved)
-        )
 
     src_corr = _prepare_report_source(df)[["date", "point", "depth_m", "Διαλυμένο Οξυγόνο DO (mg/L)", "Mn²⁺ (mg/L)"]].copy()
     src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"] = pd.to_numeric(src_corr["Διαλυμένο Οξυγόνο DO (mg/L)"], errors="coerce")
@@ -4715,10 +4528,6 @@ with tab_report:
         )
         _report_plot(fig_corr, "Συσχέτιση DO–Mn²⁺", 420)
         report_pdf_figures.append(("Συσχέτιση DO–Mn²⁺", fig_corr))
-        saved = save_plotly_figure(fig_corr, "Fig_5_5_do_mn_scatter.png")
-        report_doc_figure_registry.append(
-            figure_note("5.5", "Συσχέτιση DO–Mn²⁺", saved)
-        )
 
     if deep_points:
         mn_hov = _build_depth_time_matrix(df, sel_hov_point, "Mn²⁺ (mg/L)")
@@ -4811,10 +4620,6 @@ with tab_report:
         fig_toc.update_yaxes(title_text="TOC (mg/L)")
         _report_plot(fig_toc, "Εξέλιξη TOC", 420)
         report_pdf_figures.append(("Εξέλιξη TOC", fig_toc))
-        saved = save_plotly_figure(fig_toc, "Fig_5_6_toc_timeseries.png")
-        report_doc_figure_registry.append(
-            figure_note("5.6", "Εξέλιξη TOC", saved)
-        )
 
     # 3.3.6
     _add_report_section_title("3.3.6. Χλωροφύλλη-α και Συνθήκες Εκκίνησης Λεύκανσης")
@@ -4876,10 +4681,6 @@ with tab_report:
         fig_chla.update_yaxes(title_text="Secchi (m)", secondary_y=True)
         _report_plot(fig_chla, "Χλωροφύλλη-α και διαφάνεια νερού", 430)
         report_pdf_figures.append(("Χλωροφύλλη-α και διαφάνεια νερού", fig_chla))
-        saved = save_plotly_figure(fig_chla, "Fig_5_6_chla_secchi.png")
-        report_doc_figure_registry.append(
-            figure_note("5.6", "Χλωροφύλλη-α και διαφάνεια νερού", saved)
-        )
 
     # 3.3.7
     _add_report_section_title("3.3.7. Ηλεκτρική Αγωγιμότητα, Ασβέστιο, Αλκαλικότητα")
@@ -4958,10 +4759,6 @@ with tab_report:
         fig_chem.update_yaxes(title_text="Ca / Αλκαλικότητα", secondary_y=True)
         _report_plot(fig_chem, "EC, ασβέστιο και αλκαλικότητα", 440)
         report_pdf_figures.append(("EC, ασβέστιο και αλκαλικότητα", fig_chem))
-        saved = save_plotly_figure(fig_chem, "Fig_5_6_ec_ca_alkalinity.png")
-        report_doc_figure_registry.append(
-            figure_note("5.6", "EC, ασβέστιο και αλκαλικότητα", saved)
-        )
 
     # 3.3.8
     _add_report_section_title("3.3.8. Πρόσθετοι Δείκτες Ερμηνείας")
@@ -5024,10 +4821,6 @@ with tab_report:
         fig_ph.update_yaxes(title_text="pH", range=[7.0, 9.5])
         _report_plot(fig_ph, "Εξέλιξη pH επιφάνειας και βαθύτερων στρωμάτων", 420)
         report_pdf_figures.append(("Εξέλιξη pH επιφάνειας και βαθύτερων στρωμάτων", fig_ph))
-        saved = save_plotly_figure(fig_ph, "Fig_5_6_ph_surface_deep.png")
-        report_doc_figure_registry.append(
-            figure_note("5.6", "Εξέλιξη pH επιφάνειας και βαθύτερων στρωμάτων", saved)
-        )
 
     mgca_df = _build_mgca_summary(df)
     mgca_plot = mgca_df.dropna(subset=["MgCa_ratio"]) if not mgca_df.empty else pd.DataFrame()
@@ -5065,10 +4858,6 @@ with tab_report:
         fig_mgca.update_yaxes(title_text="Ca μέσο (mg/L)", showgrid=False, secondary_y=True)
         _report_plot(fig_mgca, "Mg/Ca λόγος και ασβέστιο", 400)
         report_pdf_figures.append(("Mg/Ca λόγος και ασβέστιο", fig_mgca))
-        saved = save_plotly_figure(fig_mgca, "Fig_5_6_mg_ca_ratio.png")
-        report_doc_figure_registry.append(
-            figure_note("5.6", "Mg/Ca λόγος και ασβέστιο", saved)
-        )
 
     nh4_df = _build_nh4_summary(df)
     if not nh4_df.empty:
@@ -5101,93 +4890,17 @@ with tab_report:
         fig_nh4.update_yaxes(title_text="NH₄⁺ (mg/L)")
         _report_plot(fig_nh4, "Εξέλιξη αμμωνιακών ανά βάθος", 400)
         report_pdf_figures.append(("Εξέλιξη αμμωνιακών ανά βάθος", fig_nh4))
-        saved = save_plotly_figure(fig_nh4, "Fig_5_6_nh4_depth.png")
-        report_doc_figure_registry.append(
-            figure_note("5.6", "Εξέλιξη αμμωνιακών ανά βάθος", saved)
-        )
 
     # 3.3.9
     _add_report_section_title("3.3.9. Συνοπτικός Πίνακας Επιβεβαίωσης")
     conf_df = _build_confirmation_table()
     st.dataframe(conf_df, use_container_width=True, hide_index=True)
     report_pdf_tables.append(("3.3.9 Συνοπτικός Πίνακας Επιβεβαίωσης", conf_df.copy()))
-    saved = save_dataframe_png(conf_df, "Table_5_7_confirmation_matrix.png", title="Συνοπτικός Πίνακας Επιβεβαίωσης")
-    report_doc_figure_registry.append(
-        figure_note("5.7", "Συνοπτικός Πίνακας Επιβεβαίωσης", saved)
-    )
     st.success(
         "Συμπέρασμα: Τα αποτελέσματα επαληθεύουν πλήρως τις κεντρικές εκτιμήσεις για εποχική στρωμάτωση, "
         "υπολιμνιακή ανοξία και αναγωγική κινητοποίηση Mn, ενώ οι εκκρεμότητες μεταφέρονται στο επίπεδο "
         "στοχευμένων εργαστηριακών αναλύσεων (XRD/SEM, Eh)."
     )
-
-    _add_report_section_title("Σχήματα για Παραδοτέο 7 — Ποιότητα και Στάθμη")
-
-    fig_turb_ts = build_turbidity_timeseries_by_date(df)
-    if len(fig_turb_ts.data):
-        _report_plot(fig_turb_ts, "Διαχρονική μεταβολή θολότητας", 400)
-        saved = save_plotly_figure(fig_turb_ts, "Fig_6_2_turbidity_timeseries.png")
-        report_doc_figure_registry.append(
-            figure_note("6.2", "Διαχρονική μεταβολή θολότητας", saved)
-        )
-    else:
-        st.info("Δεν υπάρχουν επαρκή δεδομένα για το σχήμα θολότητας (6.2).")
-
-    fig_chla_ts = build_chla_timeseries_by_date(df)
-    if len(fig_chla_ts.data):
-        _report_plot(fig_chla_ts, "Διαχρονική μεταβολή χλωροφύλλης-α", 400)
-        saved = save_plotly_figure(fig_chla_ts, "Fig_6_3_chla_timeseries.png")
-        report_doc_figure_registry.append(
-            figure_note("6.3", "Διαχρονική μεταβολή χλωροφύλλης-α", saved)
-        )
-    else:
-        st.info("Δεν υπάρχουν επαρκή δεδομένα για το σχήμα χλωροφύλλης-α (6.3).")
-
-    fig_level = build_level_timeseries()
-    if len(fig_level.data):
-        _report_plot(fig_level, "Διαχρονική μεταβολή στάθμης ταμιευτήρα", 400)
-        saved = save_plotly_figure(fig_level, "Fig_7_2_level_timeseries.png")
-        report_doc_figure_registry.append(
-            figure_note("7.2", "Διαχρονική μεταβολή στάθμης ταμιευτήρα", saved)
-        )
-    else:
-        st.info("Δεν βρέθηκε χρονοσειρά στάθμης για το σχήμα 7.2.")
-
-    fig_level_turb, fig_level_chla = build_level_quality_scatter(df)
-    if len(fig_level_turb.data):
-        _report_plot(fig_level_turb, "Συσχέτιση στάθμης–θολότητας", 380)
-        saved = save_plotly_figure(fig_level_turb, "Fig_7_3_level_vs_turbidity.png")
-        report_doc_figure_registry.append(
-            figure_note("7.3", "Συσχέτιση στάθμης–θολότητας", saved)
-        )
-    else:
-        st.info("Δεν υπάρχουν κοινές ημερομηνίες στάθμης–θολότητας για το σχήμα 7.3.")
-
-    if len(fig_level_chla.data):
-        _report_plot(fig_level_chla, "Συσχέτιση στάθμης–χλωροφύλλης-α", 380)
-        saved = save_plotly_figure(fig_level_chla, "Fig_7_3_level_vs_chla.png")
-        report_doc_figure_registry.append(
-            figure_note("7.3", "Συσχέτιση στάθμης–χλωροφύλλης-α", saved)
-        )
-    else:
-        st.info("Δεν υπάρχουν κοινές ημερομηνίες στάθμης–χλωροφύλλης για το σχήμα 7.3.")
-
-    if report_doc_figure_registry:
-        reg_df = pd.DataFrame(
-            [x.split(" | ") for x in report_doc_figure_registry],
-            columns=["Ενότητα", "Τίτλος", "Αρχείο"],
-        )
-        st.markdown("#### Registry σχημάτων για το Παραδοτέο 7")
-        st.dataframe(reg_df, use_container_width=True, hide_index=True)
-        reg_csv = reg_df.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "⬇️ Λήψη registry σχημάτων",
-            data=reg_csv,
-            file_name="p7_figure_registry.csv",
-            mime="text/csv",
-            use_container_width=True,
-            key="p7_figure_registry_download",
-        )
 
     st.markdown("#### Εξαγωγή Καρτέλας σε PDF")
     st.caption("Δημιουργήστε PDF με τους πίνακες και τα διαγράμματα του tab «Επιστημονική Ερμηνεία».")
