@@ -1289,6 +1289,16 @@ def section_bgr() -> None:
 
     pts_raw = load_bgr_points(str(points_csv))
     avg_raw = load_bgr_avg(str(avg_csv))
+    avg_from_points = False
+    if avg_raw.empty and not pts_raw.empty:
+        avg_raw = (
+            pts_raw.groupby("date", as_index=False)["bgr"]
+            .mean()
+            .rename(columns={"bgr": "value"})
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
+        avg_from_points = True
 
     bgr_date_parts: list[pd.Series] = []
     if not pts_raw.empty and "date" in pts_raw.columns:
@@ -1362,6 +1372,8 @@ def section_bgr() -> None:
         if avg.empty:
             st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής BGR για το επιλεγμένο χρονικό διάστημα.")
         else:
+            if avg_from_points:
+                st.caption("Η μέση τιμή BGR υπολογίστηκε από το BGR.csv (fallback, επειδή το BGR_AVERAGED.csv δεν ήταν διαθέσιμο ή έγκυρο).")
             c1, c2 = st.columns(2)
             smooth = c1.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="bgr_smooth")
             p90 = float(avg["value"].quantile(0.90))
