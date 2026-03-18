@@ -3884,7 +3884,7 @@ if False:
 with tab_ts:
     st.subheader("Χρονοσειρές Παραμέτρων")
     
-    col_a, col_b, col_c = st.columns([2, 2, 2])
+    col_a, col_b, col_c, col_d = st.columns([1.8, 1.8, 1.3, 2.1])
     ts_available_params = [p for p in COL_MAP if df[p].notna().any()]
     
     with col_a:
@@ -3911,6 +3911,14 @@ with tab_ts:
             options=["Όλα"] + all_depths,
             key="ts_depth"
         )
+    with col_d:
+        ts_date_range = st.date_input(
+            "Χρονικό διάστημα",
+            value=(dates[0].date(), dates[-1].date()) if dates else None,
+            min_value=dates[0].date() if dates else None,
+            max_value=dates[-1].date() if dates else None,
+            key="ts_date_range",
+        )
     ts_column_params = st.multiselect(
         "Παράμετροι ανά στήλη (έως 6)",
         options=ts_available_params,
@@ -3927,6 +3935,11 @@ with tab_ts:
         st.warning("Επιλέξτε τουλάχιστον ένα σημείο.")
     else:
         filt = df[df["point"].isin(sel_points)].copy()
+        if isinstance(ts_date_range, (list, tuple)) and len(ts_date_range) == 2:
+            ts_start = pd.Timestamp(ts_date_range[0])
+            ts_end = pd.Timestamp(ts_date_range[1])
+            if pd.notna(ts_start) and pd.notna(ts_end):
+                filt = filt[(filt["date"] >= ts_start) & (filt["date"] <= ts_end)]
         if sel_depth != "Όλα":
             filt = filt[filt["depth"] == sel_depth]
 
@@ -4939,6 +4952,27 @@ with tab_report:
     """
     )
 
+    report_date_min = pd.to_datetime(df["date"], errors="coerce").min()
+    report_date_max = pd.to_datetime(df["date"], errors="coerce").max()
+    report_quality_df = df.copy()
+    if pd.notna(report_date_min) and pd.notna(report_date_max):
+        report_date_range = st.date_input(
+            "Χρονικό διάστημα για διαγράμματα ποιότητας (TOC/Χλωροφύλλη/Θολότητα κ.λπ.)",
+            value=(report_date_min.date(), report_date_max.date()),
+            min_value=report_date_min.date(),
+            max_value=report_date_max.date(),
+            key="report_quality_date_range",
+        )
+        if isinstance(report_date_range, (list, tuple)) and len(report_date_range) == 2:
+            rq_start = pd.Timestamp(report_date_range[0])
+            rq_end = pd.Timestamp(report_date_range[1])
+            report_quality_df = report_quality_df[
+                (report_quality_df["date"] >= rq_start) & (report_quality_df["date"] <= rq_end)
+            ].copy()
+            st.caption(
+                f"Ενεργό διάστημα ποιότητας: `{rq_start.strftime('%d/%m/%Y')}` έως `{rq_end.strftime('%d/%m/%Y')}`"
+            )
+
     # 3.3.2
     _add_report_section_title("3.3.2. Θερμική Στρωμάτωση και Διμικτικός Χαρακτήρας")
     st.markdown(
@@ -5300,7 +5334,7 @@ with tab_report:
     """
     )
 
-    toc_df = _build_toc_summary(df)
+    toc_df = _build_toc_summary(report_quality_df)
     if not toc_df.empty:
         st.dataframe(
             toc_df[["Ημερομηνία", "Εύρος TOC (mg/L)", "Μέση τιμή (mg/L)", "N σημεία"]],
@@ -5381,7 +5415,7 @@ with tab_report:
     """
     )
 
-    chla_df = _build_chla_summary(df)
+    chla_df = _build_chla_summary(report_quality_df)
     if not chla_df.empty:
         st.dataframe(
             chla_df[["Ημερομηνία", "Chl-a (μg/L)", "Secchi (m)", "WST ~(°C)", "Ευνοϊκό για λεύκανση;"]],
@@ -5522,7 +5556,7 @@ with tab_report:
     # 3.3.8
     _add_report_section_title("3.3.8. Πρόσθετοι Δείκτες Ερμηνείας")
 
-    ph_df = _build_ph_summary(df)
+    ph_df = _build_ph_summary(report_quality_df)
     if not ph_df.empty:
         report_pdf_tables.append(("pH σύνοψη", ph_df.copy()))
         _add_report_section_title("pH — Σύνδεση με Λεύκανση και Αναερόβιες Συνθήκες")
@@ -5585,7 +5619,7 @@ with tab_report:
             figure_note("5.6", "Εξέλιξη pH επιφάνειας και βαθύτερων στρωμάτων", saved)
         )
 
-    mgca_df = _build_mgca_summary(df)
+    mgca_df = _build_mgca_summary(report_quality_df)
     mgca_plot = mgca_df.dropna(subset=["MgCa_ratio"]) if not mgca_df.empty else pd.DataFrame()
     if not mgca_plot.empty:
         report_pdf_tables.append(("Mg/Ca σύνοψη", mgca_plot.copy()))
@@ -5626,7 +5660,7 @@ with tab_report:
             figure_note("5.6", "Mg/Ca λόγος και ασβέστιο", saved)
         )
 
-    nh4_df = _build_nh4_summary(df)
+    nh4_df = _build_nh4_summary(report_quality_df)
     if not nh4_df.empty:
         report_pdf_tables.append(("NH₄⁺ σύνοψη", nh4_df.copy()))
         _add_report_section_title("NH₄⁺ — Δείκτης Αναερόβιας Αποδόμησης")
@@ -5679,7 +5713,7 @@ with tab_report:
 
     _add_report_section_title("Σχήματα για Παραδοτέο 7 — Ποιότητα και Στάθμη")
 
-    fig_turb_ts = build_turbidity_timeseries_by_date(df)
+    fig_turb_ts = build_turbidity_timeseries_by_date(report_quality_df)
     if len(fig_turb_ts.data):
         _report_plot(fig_turb_ts, "Διαχρονική μεταβολή θολότητας", 400)
         saved = save_plotly_figure(fig_turb_ts, "Fig_6_2_turbidity_timeseries.png")
@@ -5689,7 +5723,7 @@ with tab_report:
     else:
         st.info("Δεν υπάρχουν επαρκή δεδομένα για το σχήμα θολότητας (6.2).")
 
-    fig_chla_ts = build_chla_timeseries_by_date(df)
+    fig_chla_ts = build_chla_timeseries_by_date(report_quality_df)
     if len(fig_chla_ts.data):
         _report_plot(fig_chla_ts, "Διαχρονική μεταβολή χλωροφύλλης-α", 400)
         saved = save_plotly_figure(fig_chla_ts, "Fig_6_3_chla_timeseries.png")
@@ -5709,7 +5743,7 @@ with tab_report:
     else:
         st.info("Δεν βρέθηκε χρονοσειρά στάθμης για το σχήμα 7.2.")
 
-    fig_level_turb, fig_level_chla = build_level_quality_scatter(df)
+    fig_level_turb, fig_level_chla = build_level_quality_scatter(report_quality_df)
     if len(fig_level_turb.data):
         _report_plot(fig_level_turb, "Συσχέτιση στάθμης–θολότητας", 380)
         saved = save_plotly_figure(fig_level_turb, "Fig_7_3_level_vs_turbidity.png")
