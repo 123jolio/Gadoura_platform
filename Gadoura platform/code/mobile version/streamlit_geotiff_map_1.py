@@ -1520,12 +1520,29 @@ def section_turbidity() -> None:
 
 
 def section_bgr() -> None:
-    charts_root = DATA_ROOT / "charts_BGR"
+    candidate_roots = [
+        DATA_ROOT / "charts_BGR",
+        DATA_ROOT / "charts_bgr",
+        SATELLITE_DATA_ROOT / "DATA" / "charts_BGR",
+        SATELLITE_DATA_ROOT / "DATA" / "charts_bgr",
+    ]
+    charts_root = next((root for root in candidate_roots if root.exists()), candidate_roots[0])
     points_csv = charts_root / "BGR.csv"
     avg_csv = charts_root / "BGR_AVERAGED.csv"
 
     st.markdown("<div class='slabel'>📈 Διαγράμματα Φαινομένων Λευκασμού (BGR)</div>", unsafe_allow_html=True)
     render_profile_line_toggle_button()
+    if not points_csv.exists() and not avg_csv.exists():
+        st.error("Δεν βρέθηκαν τα αρχεία BGR CSV για τα διαγράμματα.")
+        st.code(
+            "Expected files:\n"
+            f"- {points_csv}\n"
+            f"- {avg_csv}",
+            language="text",
+        )
+        st.info("Κάντε push τον φάκελο `satellite data/DATA/charts_BGR/` (ή `charts_bgr/`) στο GitHub.")
+        return
+
     pts_raw = load_profile_points(
         csv=str(points_csv),
         value_regex=r"AreaBGR[^:]*:\s*(-?\d+(?:\.\d+)?)",
