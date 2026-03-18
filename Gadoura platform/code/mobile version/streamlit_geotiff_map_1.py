@@ -134,6 +134,7 @@ CASE_CONFIG = [
         "icon":  "🌫️",
         "folders": [GADOURA_ROOT / "BGR" / "GeoTIFFs"],
         "has_chl": False,
+        "has_bgr": True,
     },
     {
         "key":   "burned_areas",
@@ -651,6 +652,33 @@ def load_turbidity_avg(csv: str) -> pd.DataFrame:
         else pd.to_numeric(df.iloc[:, 1], errors="coerce"),
     })
     out = out.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def load_bgr_avg(csv: str) -> pd.DataFrame:
+    p = Path(csv)
+    if not p.exists():
+        return pd.DataFrame(columns=["date", "value"])
+    df = pd.read_csv(p, encoding="utf-8-sig")
+    if df.empty:
+        return pd.DataFrame(columns=["date", "value"])
+
+    date_raw = df.iloc[:, 0].astype(str).str.replace("\u202f", " ", regex=False)
+    val_raw = (
+        df.iloc[:, 1]
+        .astype(str)
+        .str.replace("\u202f", "", regex=False)
+        .str.replace(",", "", regex=False)
+        .str.strip()
+    )
+    out = pd.DataFrame(
+        {
+            "date": pd.to_datetime(date_raw, errors="coerce"),
+            "value": pd.to_numeric(val_raw, errors="coerce"),
+        }
+    )
+    out = out.dropna(subset=["date", "value"]).sort_values("date").reset_index(drop=True)
     return out
 
 
@@ -1491,6 +1519,167 @@ def section_turbidity() -> None:
             m4.metric("Μετρήσεις πεδίου", f"{avg['field'].notna().sum():,}")
 
 
+def section_bgr() -> None:
+    charts_root = DATA_ROOT / "charts_BGR"
+    points_csv = charts_root / "BGR.csv"
+    avg_csv = charts_root / "BGR_AVERAGED.csv"
+
+    st.markdown("<div class='slabel'>📈 Διαγράμματα Φαινομένων Λευκασμού (BGR)</div>", unsafe_allow_html=True)
+    render_profile_line_toggle_button()
+    pts_raw = load_profile_points(
+        csv=str(points_csv),
+        value_regex=r"AreaBGR[^:]*:\s*(-?\d+(?:\.\d+)?)",
+        value_name="bgr",
+    )
+    avg_raw = load_bgr_avg(str(avg_csv))
+
+    bgr_date_parts: list[pd.Series] = []
+    if not pts_raw.empty and "date" in pts_raw.columns:
+        bgr_date_parts.append(pd.to_datetime(pts_raw["date"], errors="coerce"))
+    if not avg_raw.empty and "date" in avg_raw.columns:
+        bgr_date_parts.append(pd.to_datetime(avg_raw["date"], errors="coerce"))
+
+    bgr_start = None
+    bgr_end = None
+    if bgr_date_parts:
+        bgr_dates = pd.concat(bgr_date_parts, ignore_index=True).dropna()
+        if not bgr_dates.empty:
+            dmin = bgr_dates.min().date()
+            dmax = bgr_dates.max().date()
+            bgr_range = st.date_input(
+                "Χρονικό διάστημα διαγραμμάτων BGR",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="mobile_bgr_section_date_range",
+            )
+            if isinstance(bgr_range, (list, tuple)) and len(bgr_range) == 2:
+                bgr_start = pd.Timestamp(bgr_range[0])
+                bgr_end = pd.Timestamp(bgr_range[1])
+
+    tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
+
+    with tab_pts:
+        pts = pts_raw.copy()
+        if bgr_start is not None and bgr_end is not None and not pts.empty:
+            pts = pts[(pts["date"] >= bgr_start) & (pts["date"] <= bgr_end)].copy()
+        if pts.empty:
+            st.info("Δεν βρέθηκαν δεδομένα BGR για το επιλεγμένο χρονικό διάστημα.")
+        else:
+            c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
+            size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="mobile_bgr_size")
+            opacity = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02, key="mobile_bgr_opacity")
+            plot = pts[pts["point"] >= 0].copy()
+            plot["color"] = plot["color"].fillna("#6E778A")
+            unique_colors = sorted(plot["color"].unique().tolist())
+            ch = (
+                alt.Chart(plot)
+                .mark_circle(size=int(size), opacity=float(opacity))
+                .encode(
+                    x=alt.X("date:T", title="Ημερομηνία", axis=alt.Axis(format="%b %y", labelAngle=-30)),
+                    y=alt.Y("point:Q", title="Θέση (σημείο)"),
+                    color=alt.Color("color:N", scale=alt.Scale(domain=unique_colors, range=unique_colors), legend=None),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("point:Q", title="Σημείο"),
+                        alt.Tooltip("bgr:Q", title="AreaBGR", format=".3f"),
+                    ],
+                )
+                .properties(height=460)
+            )
+            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            m1, m2, m3 = st.columns(1) if _is_mobile else st.columns(3)
+            m1.metric("Εγγραφές", f"{len(pts):,}")
+            m2.metric("Ημερομηνίες", f"{plot['date'].nunique():,}")
+            m3.metric("Σημεία μέτρησης", f"{plot['point'].nunique():,}")
+
+    with tab_avg:
+        avg = avg_raw.copy()
+        if bgr_start is not None and bgr_end is not None and not avg.empty:
+            avg = avg[(avg["date"] >= bgr_start) & (avg["date"] <= bgr_end)].copy()
+        if avg.empty:
+            st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής BGR για το επιλεγμένο χρονικό διάστημα.")
+        else:
+            c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
+            smooth = c1.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="mobile_bgr_smooth")
+            p90 = float(avg["value"].quantile(0.90))
+            threshold = c2.number_input(
+                "Όριο υψηλών τιμών BGR",
+                min_value=0.0,
+                value=max(1.0, round(p90, 3)),
+                step=1000.0,
+                key="mobile_bgr_threshold",
+            )
+            avg["display"] = avg["value"].rolling(smooth, min_periods=1).mean()
+            avg["bgr_alarm"] = avg["value"] > threshold
+            bgr_alarm_rows = _extract_alarm_rows(avg, "value", float(threshold))
+
+            area = (
+                alt.Chart(avg)
+                .mark_area(
+                    line={"color": "#06d6f0", "strokeWidth": 2},
+                    color=alt.Gradient(
+                        gradient="linear",
+                        stops=[
+                            alt.GradientStop(color="rgba(6,214,240,.4)", offset=0),
+                            alt.GradientStop(color="rgba(6,214,240,.02)", offset=1),
+                        ],
+                        x1=1,
+                        x2=1,
+                        y1=1,
+                        y2=0,
+                    ),
+                )
+                .encode(
+                    x=alt.X("date:T", title="Ημερομηνία"),
+                    y=alt.Y("display:Q", title="Μέση AreaBGR"),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("display:Q", title="AreaBGR", format=".3f"),
+                    ],
+                )
+                .properties(height=360)
+            )
+            limit_rule = (
+                alt.Chart(avg)
+                .mark_rule(color="#ef4444", strokeWidth=3, strokeDash=[8, 5], opacity=0.95)
+                .encode(y=alt.datum(float(threshold)))
+            )
+            alarm_points = (
+                alt.Chart(avg[avg["bgr_alarm"]])
+                .mark_circle(color="#ef4444", size=70)
+                .encode(
+                    x="date:T",
+                    y="display:Q",
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("value:Q", title="AreaBGR", format=".3f"),
+                    ],
+                )
+            )
+            st.altair_chart(_chart_cfg(alt.layer(area, limit_rule, alarm_points)), use_container_width=True)
+
+            if bgr_alarm_rows.empty:
+                st.success("Δεν εντοπίστηκαν υψηλές τιμές BGR πάνω από το επιλεγμένο όριο.")
+            else:
+                st.warning(f"Εντοπίστηκαν {len(bgr_alarm_rows)} εγγραφές πάνω από το όριο BGR.")
+                st.dataframe(
+                    pd.DataFrame(
+                        {
+                            "Ημερομηνία": bgr_alarm_rows["date"].dt.strftime("%Y-%m-%d"),
+                            "AreaBGR": bgr_alarm_rows["value"].round(3),
+                        }
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            m1, m2, m3 = st.columns(1) if _is_mobile else st.columns(3)
+            m1.metric("Ελάχιστη", f"{avg['value'].min():,.3f}")
+            m2.metric("Μέγιστη", f"{avg['value'].max():,.3f}")
+            m3.metric("Μέση", f"{avg['value'].mean():,.3f}")
+
+
 def section_level() -> None:
     st.markdown(
         "<div class='lcard'><div class='lcard-title'>📈 Ύψος Στάθμης Ταμιευτήρα Γαδουρά</div>",
@@ -1812,6 +2001,10 @@ def render_satellite_dashboard(
             section_turbidity()
 
     # ── Footer ───────────────────────────────────────────────────────────────
+    if cfg.get("has_bgr", False):
+        with st.expander("📈 Διαγράμματα Φαινομένων Λευκασμού (BGR)", expanded=False):
+            section_bgr()
+
     if cfg.get("chart_image"):
         with st.expander(cfg.get("chart_expander_title", "📊 Διαγράμματα"), expanded=False):
             chart_image = Path(cfg["chart_image"])
