@@ -746,6 +746,48 @@ def load_bgr_avg(csv: str) -> pd.DataFrame:
     return out
 
 
+@st.cache_data(show_spinner=False)
+def load_bgr_points(csv: str) -> pd.DataFrame:
+    p = Path(csv)
+    if not p.exists():
+        return pd.DataFrame(columns=["date", "point", "bgr", "color"])
+
+    raw = None
+    for enc in ("utf-8-sig", "utf-8", "cp1253", "latin-1"):
+        try:
+            raw = pd.read_csv(p, encoding=enc)
+            break
+        except Exception:
+            continue
+    if raw is None or raw.shape[1] < 2:
+        return pd.DataFrame(columns=["date", "point", "bgr", "color"])
+
+    col0 = raw.iloc[:, 0].astype(str).str.replace("\u202f", " ", regex=False).str.replace("\xa0", " ", regex=False)
+    date_from_col = pd.to_datetime(col0, errors="coerce")
+    point = pd.to_numeric(raw.iloc[:, 1], errors="coerce")
+
+    styles = raw.iloc[:, 2].astype(str) if raw.shape[1] > 2 else pd.Series([""] * len(raw))
+    details = raw.iloc[:, 3].astype(str) if raw.shape[1] > 3 else pd.Series([""] * len(raw))
+    date_from_details = pd.to_datetime(
+        details.str.extract(r"(\d{4}-\d{2}-\d{2})", expand=False),
+        errors="coerce",
+    )
+    date = date_from_col.fillna(date_from_details)
+
+    val = details.str.extract(r"AreaBGR[^:]*:\s*(-?\d[\d,]*(?:\.\d+)?)", expand=False)
+    if val.isna().all():
+        val = details.str.extract(r"\bBGR[^:]*:\s*(-?\d[\d,]*(?:\.\d+)?)", expand=False)
+    if val.isna().all():
+        val = details.str.extract(r"(-?\d[\d,]*(?:\.\d+)?)\s*$", expand=False)
+    bgr = pd.to_numeric(val.astype(str).str.replace(",", "", regex=False), errors="coerce")
+
+    color = styles.str.extract(r"fill-color:\s*(#[0-9A-Fa-f]{6})", expand=False).str.upper()
+
+    out = pd.DataFrame({"date": date, "point": point, "bgr": bgr, "color": color}).dropna(subset=["date", "bgr"])
+    out["point"] = out["point"].fillna(-1).astype(int)
+    return out.sort_values(["date", "point"]).reset_index(drop=True)
+
+
 def _extract_alarm_rows(df: pd.DataFrame, value_col: str, threshold: float) -> pd.DataFrame:
     if df.empty or "date" not in df.columns or value_col not in df.columns:
         return pd.DataFrame(columns=["date", "value"])
@@ -1245,11 +1287,7 @@ def section_bgr() -> None:
         st.info("Κάντε push τον φάκελο `satellite data/DATA/charts_BGR/` (ή `charts_bgr/`) στο GitHub.")
         return
 
-    pts_raw = load_profile_points(
-        csv=str(points_csv),
-        value_regex=r"AreaBGR[^:]*:\s*(-?\d+(?:\.\d+)?)",
-        value_name="bgr",
-    )
+    pts_raw = load_bgr_points(str(points_csv))
     avg_raw = load_bgr_avg(str(avg_csv))
 
     bgr_date_parts: list[pd.Series] = []
@@ -1282,6 +1320,7 @@ def section_bgr() -> None:
         pts = pts_raw.copy()
         if bgr_start is not None and bgr_end is not None and not pts.empty:
             pts = pts[(pts["date"] >= bgr_start) & (pts["date"] <= bgr_end)].copy()
+        st.caption(f"Rows: points={len(pts_raw):,}, averaged={len(avg_raw):,}")
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα BGR για το επιλεγμένο χρονικό διάστημα.")
         else:
