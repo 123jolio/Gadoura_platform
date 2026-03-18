@@ -837,12 +837,41 @@ def section_chlorophyll() -> None:
     st.markdown("<div class='slabel'>📊 Διαγράμματα Επικυρωμένης Χλωροφύλλης</div>",
                 unsafe_allow_html=True)
     render_profile_line_toggle_button()
+    pts_raw = load_chl_points(str(points_csv))
+    avg_raw = load_chl_avg(str(avg_csv))
+
+    date_parts: list[pd.Series] = []
+    if not pts_raw.empty and "date" in pts_raw.columns:
+        date_parts.append(pd.to_datetime(pts_raw["date"], errors="coerce"))
+    if not avg_raw.empty and "date" in avg_raw.columns:
+        date_parts.append(pd.to_datetime(avg_raw["date"], errors="coerce"))
+
+    chl_start = None
+    chl_end = None
+    if date_parts:
+        date_all = pd.concat(date_parts, ignore_index=True).dropna()
+        if not date_all.empty:
+            dmin = date_all.min().date()
+            dmax = date_all.max().date()
+            chl_range = st.date_input(
+                "Χρονικό διάστημα διαγραμμάτων χλωροφύλλης",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="chl_section_date_range",
+            )
+            if isinstance(chl_range, (list, tuple)) and len(chl_range) == 2:
+                chl_start = pd.Timestamp(chl_range[0])
+                chl_end = pd.Timestamp(chl_range[1])
+
     tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
 
     with tab_pts:
-        pts = load_chl_points(str(points_csv))
+        pts = pts_raw.copy()
+        if chl_start is not None and chl_end is not None and not pts.empty:
+            pts = pts[(pts["date"] >= chl_start) & (pts["date"] <= chl_end)].copy()
         if pts.empty:
-            st.info("Δεν βρέθηκαν δεδομένα.")
+            st.info("Δεν βρέθηκαν δεδομένα για το επιλεγμένο χρονικό διάστημα.")
         else:
             c1, c2 = st.columns(2)
             sz = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4)
@@ -874,9 +903,11 @@ def section_chlorophyll() -> None:
             m3.metric("Σημεία μέτρησης",f"{plot['point'].nunique():,}")
 
     with tab_avg:
-        avg = load_chl_avg(str(avg_csv))
+        avg = avg_raw.copy()
+        if chl_start is not None and chl_end is not None and not avg.empty:
+            avg = avg[(avg["date"] >= chl_start) & (avg["date"] <= chl_end)].copy()
         if avg.empty:
-            st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής.")
+            st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής για το επιλεγμένο χρονικό διάστημα.")
         else:
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1)
             avg = avg.copy()
@@ -954,16 +985,45 @@ def section_turbidity() -> None:
 
     st.markdown("<div class='slabel'>📉 Διαγράμματα Θολότητας</div>", unsafe_allow_html=True)
     render_profile_line_toggle_button()
+    pts_raw = load_profile_points(
+        csv=str(points_csv),
+        value_regex=r"NDTI[^:]*:\s*(-?\d+(?:\.\d+)?)",
+        value_name="ndti",
+    )
+    avg_raw = load_turbidity_avg(str(avg_csv))
+
+    turb_date_parts: list[pd.Series] = []
+    if not pts_raw.empty and "date" in pts_raw.columns:
+        turb_date_parts.append(pd.to_datetime(pts_raw["date"], errors="coerce"))
+    if not avg_raw.empty and "date" in avg_raw.columns:
+        turb_date_parts.append(pd.to_datetime(avg_raw["date"], errors="coerce"))
+
+    turb_start = None
+    turb_end = None
+    if turb_date_parts:
+        turb_dates = pd.concat(turb_date_parts, ignore_index=True).dropna()
+        if not turb_dates.empty:
+            dmin = turb_dates.min().date()
+            dmax = turb_dates.max().date()
+            turb_range = st.date_input(
+                "Χρονικό διάστημα διαγραμμάτων θολότητας",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="turb_section_date_range",
+            )
+            if isinstance(turb_range, (list, tuple)) and len(turb_range) == 2:
+                turb_start = pd.Timestamp(turb_range[0])
+                turb_end = pd.Timestamp(turb_range[1])
+
     tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
 
     with tab_pts:
-        pts = load_profile_points(
-            csv=str(points_csv),
-            value_regex=r"NDTI[^:]*:\s*(-?\d+(?:\.\d+)?)",
-            value_name="ndti",
-        )
+        pts = pts_raw.copy()
+        if turb_start is not None and turb_end is not None and not pts.empty:
+            pts = pts[(pts["date"] >= turb_start) & (pts["date"] <= turb_end)].copy()
         if pts.empty:
-            st.info("Δεν βρέθηκαν δεδομένα θολότητας.")
+            st.info("Δεν βρέθηκαν δεδομένα θολότητας για το επιλεγμένο χρονικό διάστημα.")
         else:
             c1, c2 = st.columns(2)
             size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="turb_size")
@@ -1003,9 +1063,11 @@ def section_turbidity() -> None:
             m3.metric("Σημεία μέτρησης", f"{plot['point'].nunique():,}")
 
     with tab_avg:
-        avg = load_turbidity_avg(str(avg_csv))
+        avg = avg_raw.copy()
+        if turb_start is not None and turb_end is not None and not avg.empty:
+            avg = avg[(avg["date"] >= turb_start) & (avg["date"] <= turb_end)].copy()
         if avg.empty:
-            st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής θολότητας.")
+            st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής θολότητας για το επιλεγμένο χρονικό διάστημα.")
         else:
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="turb_smooth")
             avg = avg.copy()
@@ -1088,6 +1150,10 @@ def section_turbidity() -> None:
                 )
 
             chl_avg_for_corr = load_chl_avg(str(DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv"))
+            if turb_start is not None and turb_end is not None and not chl_avg_for_corr.empty:
+                chl_avg_for_corr = chl_avg_for_corr[
+                    (chl_avg_for_corr["date"] >= turb_start) & (chl_avg_for_corr["date"] <= turb_end)
+                ].copy()
             alarm_corr = _build_alarm_correlation(chl_avg_for_corr, avg)
             st.markdown("#### Συσχέτιση alarms χλωροφύλλης-θολότητας")
             c1, c2, c3, c4 = st.columns(4)

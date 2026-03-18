@@ -767,17 +767,75 @@ def render_profile_line_toggle_button() -> None:
         st.rerun()
 
 
-def section_chlorophyll() -> None:
+def _legacy_section_chlorophyll_broken() -> None:
     points_csv = DATA_ROOT / "VALIDATED_CHLOROPHYL.csv"
     avg_csv    = DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv"
 
     st.markdown("<div class='slabel'>📊 Διαγράμματα Επικυρωμένης Χλωροφύλλης</div>",
                 unsafe_allow_html=True)
     render_profile_line_toggle_button()
+    pts_raw = load_profile_points(
+        csv=str(points_csv),
+        value_regex=r"NDTI[^:]*:\s*(-?\d+(?:\.\d+)?)",
+        value_name="ndti",
+    )
+    avg_raw = load_turbidity_avg(str(avg_csv))
+
+    turb_date_parts: list[pd.Series] = []
+    if not pts_raw.empty and "date" in pts_raw.columns:
+        turb_date_parts.append(pd.to_datetime(pts_raw["date"], errors="coerce"))
+    if not avg_raw.empty and "date" in avg_raw.columns:
+        turb_date_parts.append(pd.to_datetime(avg_raw["date"], errors="coerce"))
+
+    turb_start = None
+    turb_end = None
+    if turb_date_parts:
+        turb_dates = pd.concat(turb_date_parts, ignore_index=True).dropna()
+        if not turb_dates.empty:
+            dmin = turb_dates.min().date()
+            dmax = turb_dates.max().date()
+            turb_range = st.date_input(
+                "Χρονικό διάστημα διαγραμμάτων θολότητας",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="mobile_turb_section_date_range",
+            )
+            if isinstance(turb_range, (list, tuple)) and len(turb_range) == 2:
+                turb_start = pd.Timestamp(turb_range[0])
+                turb_end = pd.Timestamp(turb_range[1])
+    pts_raw = load_chl_points(str(points_csv))
+    avg_raw = load_chl_avg(str(avg_csv))
+
+    date_parts: list[pd.Series] = []
+    if not pts_raw.empty and "date" in pts_raw.columns:
+        date_parts.append(pd.to_datetime(pts_raw["date"], errors="coerce"))
+    if not avg_raw.empty and "date" in avg_raw.columns:
+        date_parts.append(pd.to_datetime(avg_raw["date"], errors="coerce"))
+
+    chl_start = None
+    chl_end = None
+    if date_parts:
+        date_all = pd.concat(date_parts, ignore_index=True).dropna()
+        if not date_all.empty:
+            dmin = date_all.min().date()
+            dmax = date_all.max().date()
+            chl_range = st.date_input(
+                "Χρονικό διάστημα διαγραμμάτων χλωροφύλλης",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="mobile_chl_section_date_range",
+            )
+            if isinstance(chl_range, (list, tuple)) and len(chl_range) == 2:
+                chl_start = pd.Timestamp(chl_range[0])
+                chl_end = pd.Timestamp(chl_range[1])
     tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
 
     with tab_pts:
-        pts = load_chl_points(str(points_csv))
+        pts = pts_raw.copy()
+        if chl_start is not None and chl_end is not None and not pts.empty:
+            pts = pts[(pts["date"] >= chl_start) & (pts["date"] <= chl_end)].copy()
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα.")
         else:
@@ -811,7 +869,9 @@ def section_chlorophyll() -> None:
             m3.metric("Σημεία μέτρησης",f"{plot['point'].nunique():,}")
 
     with tab_avg:
-        avg = load_chl_avg(str(avg_csv))
+        avg = avg_raw.copy()
+        if chl_start is not None and chl_end is not None and not avg.empty:
+            avg = avg[(avg["date"] >= chl_start) & (avg["date"] <= chl_end)].copy()
         if avg.empty:
             st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής.")
         else:
@@ -884,7 +944,7 @@ def section_chlorophyll() -> None:
             m3.metric("Μέση",     f"{avg['value'].mean():.3f}")
 
 
-def section_turbidity() -> None:
+def _legacy_section_turbidity_broken() -> None:
     charts_root = DATA_ROOT / "charts_turbidity"
     points_csv = charts_root / "homvoller turbidity.csv"
     avg_csv = charts_root / "average turbidity.csv"
@@ -894,11 +954,9 @@ def section_turbidity() -> None:
     tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
 
     with tab_pts:
-        pts = load_profile_points(
-            csv=str(points_csv),
-            value_regex=r"NDTI[^:]*:\s*(-?\d+(?:\.\d+)?)",
-            value_name="ndti",
-        )
+        pts = pts_raw.copy()
+        if turb_start is not None and turb_end is not None and not pts.empty:
+            pts = pts[(pts["date"] >= turb_start) & (pts["date"] <= turb_end)].copy()
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα θολότητας.")
         else:
@@ -940,7 +998,9 @@ def section_turbidity() -> None:
             m3.metric("Σημεία μέτρησης", f"{plot['point'].nunique():,}")
 
     with tab_avg:
-        avg = load_turbidity_avg(str(avg_csv))
+        avg = avg_raw.copy()
+        if turb_start is not None and turb_end is not None and not avg.empty:
+            avg = avg[(avg["date"] >= turb_start) & (avg["date"] <= turb_end)].copy()
         if avg.empty:
             st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής θολότητας.")
         else:
@@ -1025,6 +1085,373 @@ def section_turbidity() -> None:
                 )
 
             chl_avg_for_corr = load_chl_avg(str(DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv"))
+            if turb_start is not None and turb_end is not None and not chl_avg_for_corr.empty:
+                chl_avg_for_corr = chl_avg_for_corr[
+                    (chl_avg_for_corr["date"] >= turb_start) & (chl_avg_for_corr["date"] <= turb_end)
+                ].copy()
+            alarm_corr = _build_alarm_correlation(chl_avg_for_corr, avg)
+            st.markdown("#### Συσχέτιση alarms χλωροφύλλης-θολότητας")
+            c1, c2, c3, c4 = st.columns(2) + st.columns(2) if _is_mobile else st.columns(4)
+            c1.metric("Κοινά alarms", f"{alarm_corr['shared_alarm_count']}")
+            c2.metric("Alarm ημέρες Chl-a", f"{alarm_corr['chl_alarm_count']}")
+            c3.metric("Alarm ημέρες NDTI", f"{alarm_corr['turb_alarm_count']}")
+            if np.isnan(alarm_corr["pearson"]):
+                c4.metric("Pearson r", "n/a")
+            else:
+                c4.metric("Pearson r", f"{alarm_corr['pearson']:.3f}")
+
+            overlap_text = []
+            if not np.isnan(alarm_corr["jaccard"]):
+                overlap_text.append(f"Jaccard overlap: {alarm_corr['jaccard']:.1%}")
+            if not np.isnan(alarm_corr["chl_overlap"]):
+                overlap_text.append(f"Κάλυψη alarm Chl-a: {alarm_corr['chl_overlap']:.1%}")
+            if not np.isnan(alarm_corr["turb_overlap"]):
+                overlap_text.append(f"Κάλυψη alarm NDTI: {alarm_corr['turb_overlap']:.1%}")
+            if alarm_corr["paired_points"] > 0:
+                overlap_text.append(f"Κοινές ημερομηνίες για Pearson: {alarm_corr['paired_points']}")
+            if overlap_text:
+                st.caption(" | ".join(overlap_text))
+
+            if alarm_corr["shared_dates"]:
+                st.dataframe(
+                    pd.DataFrame({"Κοινές ημερομηνίες alarm": alarm_corr["shared_dates"]}),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("Δεν βρέθηκαν κοινές ημερομηνίες όπου και οι δύο δείκτες ήταν σε alarm.")
+
+            m1, m2, m3, m4 = (st.columns(2) + st.columns(2)) if _is_mobile else st.columns(4)
+            m1.metric("Ελάχιστη (NDTI)", f"{avg['satellite'].min():.3f}")
+            m2.metric("Μέγιστη (NDTI)", f"{avg['satellite'].max():.3f}")
+            m3.metric("Μέση (NDTI)", f"{avg['satellite'].mean():.3f}")
+            m4.metric("Μετρήσεις πεδίου", f"{avg['field'].notna().sum():,}")
+
+
+def section_chlorophyll() -> None:
+    points_csv = DATA_ROOT / "VALIDATED_CHLOROPHYL.csv"
+    avg_csv = DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv"
+
+    st.markdown(
+        "<div class='slabel'>📊 Διαγράμματα Επικυρωμένης Χλωροφύλλης</div>",
+        unsafe_allow_html=True,
+    )
+    render_profile_line_toggle_button()
+    pts_raw = load_chl_points(str(points_csv))
+    avg_raw = load_chl_avg(str(avg_csv))
+
+    date_parts: list[pd.Series] = []
+    if not pts_raw.empty and "date" in pts_raw.columns:
+        date_parts.append(pd.to_datetime(pts_raw["date"], errors="coerce"))
+    if not avg_raw.empty and "date" in avg_raw.columns:
+        date_parts.append(pd.to_datetime(avg_raw["date"], errors="coerce"))
+
+    chl_start = None
+    chl_end = None
+    if date_parts:
+        date_all = pd.concat(date_parts, ignore_index=True).dropna()
+        if not date_all.empty:
+            dmin = date_all.min().date()
+            dmax = date_all.max().date()
+            chl_range = st.date_input(
+                "Χρονικό διάστημα διαγραμμάτων χλωροφύλλης",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="mobile_chl_section_date_range",
+            )
+            if isinstance(chl_range, (list, tuple)) and len(chl_range) == 2:
+                chl_start = pd.Timestamp(chl_range[0])
+                chl_end = pd.Timestamp(chl_range[1])
+
+    tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
+
+    with tab_pts:
+        pts = pts_raw.copy()
+        if chl_start is not None and chl_end is not None and not pts.empty:
+            pts = pts[(pts["date"] >= chl_start) & (pts["date"] <= chl_end)].copy()
+        if pts.empty:
+            st.info("Δεν βρέθηκαν δεδομένα για το επιλεγμένο χρονικό διάστημα.")
+        else:
+            c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
+            sz = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4)
+            op = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02)
+            plot = pts[pts["point"] >= 0].copy()
+            plot["color"] = plot["color"].fillna("#6E778A")
+            uc = sorted(plot["color"].unique().tolist())
+            ch = (
+                alt.Chart(plot)
+                .mark_circle(size=int(sz), opacity=float(op))
+                .encode(
+                    x=alt.X("date:T", title="Ημερομηνία", axis=alt.Axis(format="%b %y", labelAngle=-30)),
+                    y=alt.Y("point:Q", title="Θέση (σημείο)"),
+                    color=alt.Color("color:N", scale=alt.Scale(domain=uc, range=uc), legend=None),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("point:Q", title="Σημείο"),
+                        alt.Tooltip("chl_a:Q", title="Chl-a", format=".3f"),
+                    ],
+                )
+                .properties(height=460)
+            )
+            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Εγγραφές", f"{len(pts):,}")
+            m2.metric("Ημερομηνίες", f"{plot['date'].nunique():,}")
+            m3.metric("Σημεία μέτρησης", f"{plot['point'].nunique():,}")
+
+    with tab_avg:
+        avg = avg_raw.copy()
+        if chl_start is not None and chl_end is not None and not avg.empty:
+            avg = avg[(avg["date"] >= chl_start) & (avg["date"] <= chl_end)].copy()
+        if avg.empty:
+            st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής για το επιλεγμένο χρονικό διάστημα.")
+        else:
+            smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1)
+            avg = avg.copy()
+            avg["display"] = avg["value"].rolling(smooth, min_periods=1).mean()
+            avg["chl_alarm"] = avg["value"] > CHL_ALERT_THRESHOLD
+            chl_alarm_rows = _extract_alarm_rows(avg, "value", CHL_ALERT_THRESHOLD)
+
+            area = (
+                alt.Chart(avg)
+                .mark_area(
+                    line={"color": "#06d6f0", "strokeWidth": 2},
+                    color=alt.Gradient(
+                        gradient="linear",
+                        stops=[
+                            alt.GradientStop(color="rgba(6,214,240,.4)", offset=0),
+                            alt.GradientStop(color="rgba(6,214,240,.02)", offset=1),
+                        ],
+                        x1=1,
+                        x2=1,
+                        y1=1,
+                        y2=0,
+                    ),
+                )
+                .encode(
+                    x=alt.X("date:T", title="Ημερομηνία"),
+                    y=alt.Y("display:Q", title="Μέση Chl-a", scale=alt.Scale(domain=[0, 30], clamp=True)),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("display:Q", title="Chl-a", format=".3f"),
+                    ],
+                )
+                .properties(height=360)
+            )
+            danger_zone = (
+                alt.Chart(pd.DataFrame({"ymin": [CHL_ALERT_THRESHOLD], "ymax": [30.0]}))
+                .mark_rect(color="#ef4444", opacity=0.16)
+                .encode(y="ymin:Q", y2="ymax:Q")
+            )
+            limit_rule = (
+                alt.Chart(avg)
+                .mark_rule(color="#ef4444", strokeWidth=3, strokeDash=[8, 5], opacity=0.95)
+                .encode(y=alt.datum(CHL_ALERT_THRESHOLD))
+            )
+            alarm_points = (
+                alt.Chart(avg[avg["chl_alarm"]])
+                .mark_circle(color="#ef4444", size=70)
+                .encode(
+                    x="date:T",
+                    y="display:Q",
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("value:Q", title="Μέση Chl-a", format=".3f"),
+                    ],
+                )
+            )
+            st.altair_chart(_chart_cfg(alt.layer(area, danger_zone, limit_rule, alarm_points)), use_container_width=True)
+            if chl_alarm_rows.empty:
+                st.success("Δεν υπάρχουν alarms χλωροφύλλης πάνω από 24.")
+            else:
+                st.warning(f"Καταγράφηκαν {len(chl_alarm_rows)} alarms χλωροφύλλης (> 24).")
+                st.dataframe(
+                    pd.DataFrame(
+                        {
+                            "Ημερομηνία": chl_alarm_rows["date"].dt.strftime("%Y-%m-%d"),
+                            "Μέση Chl-a": chl_alarm_rows["value"].round(3),
+                        }
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Ελάχιστη", f"{avg['value'].min():.3f}")
+            m2.metric("Μέγιστη", f"{avg['value'].max():.3f}")
+            m3.metric("Μέση", f"{avg['value'].mean():.3f}")
+
+
+def section_turbidity() -> None:
+    charts_root = DATA_ROOT / "charts_turbidity"
+    points_csv = charts_root / "homvoller turbidity.csv"
+    avg_csv = charts_root / "average turbidity.csv"
+
+    st.markdown("<div class='slabel'>📉 Διαγράμματα Θολότητας</div>", unsafe_allow_html=True)
+    render_profile_line_toggle_button()
+    pts_raw = load_profile_points(
+        csv=str(points_csv),
+        value_regex=r"NDTI[^:]*:\s*(-?\d+(?:\.\d+)?)",
+        value_name="ndti",
+    )
+    avg_raw = load_turbidity_avg(str(avg_csv))
+
+    turb_date_parts: list[pd.Series] = []
+    if not pts_raw.empty and "date" in pts_raw.columns:
+        turb_date_parts.append(pd.to_datetime(pts_raw["date"], errors="coerce"))
+    if not avg_raw.empty and "date" in avg_raw.columns:
+        turb_date_parts.append(pd.to_datetime(avg_raw["date"], errors="coerce"))
+
+    turb_start = None
+    turb_end = None
+    if turb_date_parts:
+        turb_dates = pd.concat(turb_date_parts, ignore_index=True).dropna()
+        if not turb_dates.empty:
+            dmin = turb_dates.min().date()
+            dmax = turb_dates.max().date()
+            turb_range = st.date_input(
+                "Χρονικό διάστημα διαγραμμάτων θολότητας",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="mobile_turb_section_date_range",
+            )
+            if isinstance(turb_range, (list, tuple)) and len(turb_range) == 2:
+                turb_start = pd.Timestamp(turb_range[0])
+                turb_end = pd.Timestamp(turb_range[1])
+
+    tab_pts, tab_avg = st.tabs(["Τιμές κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"])
+
+    with tab_pts:
+        pts = pts_raw.copy()
+        if turb_start is not None and turb_end is not None and not pts.empty:
+            pts = pts[(pts["date"] >= turb_start) & (pts["date"] <= turb_end)].copy()
+        if pts.empty:
+            st.info("Δεν βρέθηκαν δεδομένα θολότητας για το επιλεγμένο χρονικό διάστημα.")
+        else:
+            c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
+            size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="turb_size")
+            opacity = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02, key="turb_opacity")
+
+            plot = pts[pts["point"] >= 0].copy()
+            plot["color"] = plot["color"].fillna("#6E778A")
+            unique_colors = sorted(plot["color"].unique().tolist())
+            ch = (
+                alt.Chart(plot)
+                .mark_circle(size=int(size), opacity=float(opacity))
+                .encode(
+                    x=alt.X("date:T", title="Ημερομηνία", axis=alt.Axis(format="%b %y", labelAngle=-30)),
+                    y=alt.Y("point:Q", title="Θέση (σημείο)"),
+                    color=alt.Color("color:N", scale=alt.Scale(domain=unique_colors, range=unique_colors), legend=None),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("point:Q", title="Σημείο"),
+                        alt.Tooltip("ndti:Q", title="NDTI", format=".3f"),
+                    ],
+                )
+                .properties(height=460)
+            )
+            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+
+            m1, m2, m3 = st.columns(1) if _is_mobile else st.columns(3)
+            m1.metric("Εγγραφές", f"{len(pts):,}")
+            m2.metric("Ημερομηνίες", f"{plot['date'].nunique():,}")
+            m3.metric("Σημεία μέτρησης", f"{plot['point'].nunique():,}")
+
+    with tab_avg:
+        avg = avg_raw.copy()
+        if turb_start is not None and turb_end is not None and not avg.empty:
+            avg = avg[(avg["date"] >= turb_start) & (avg["date"] <= turb_end)].copy()
+        if avg.empty:
+            st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής θολότητας για το επιλεγμένο χρονικό διάστημα.")
+        else:
+            smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="turb_smooth")
+            avg = avg.copy()
+            avg["satellite_display"] = avg["satellite"].rolling(smooth, min_periods=1).mean()
+            avg["turb_alarm"] = avg["satellite"] > TURBIDITY_ALERT_THRESHOLD
+            turb_alarm_rows = _extract_alarm_rows(avg, "satellite", TURBIDITY_ALERT_THRESHOLD)
+
+            sat_line = (
+                alt.Chart(avg)
+                .mark_line(color="#06d6f0", strokeWidth=2.2)
+                .encode(
+                    x=alt.X("date:T", title="Ημερομηνία"),
+                    y=alt.Y("satellite_display:Q", title="Δορυφορική τιμή (NDTI)"),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("satellite_display:Q", title="NDTI", format=".3f"),
+                    ],
+                )
+            )
+            sat_points = alt.Chart(avg).mark_point(color="#06d6f0", size=35, opacity=0.85).encode(
+                x="date:T", y="satellite_display:Q"
+            )
+            sat_limit_rule = (
+                alt.Chart(avg)
+                .mark_rule(color="#ef4444", strokeWidth=3, strokeDash=[8, 5], opacity=0.95)
+                .encode(y=alt.datum(TURBIDITY_ALERT_THRESHOLD))
+            )
+            sat_alarm_points = (
+                alt.Chart(avg[avg["turb_alarm"]])
+                .mark_circle(color="#ef4444", size=70)
+                .encode(
+                    x="date:T",
+                    y="satellite_display:Q",
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Ημερομηνία"),
+                        alt.Tooltip("satellite:Q", title="Μέση NDTI", format=".3f"),
+                    ],
+                )
+            )
+
+            layers = [sat_line, sat_points, sat_limit_rule, sat_alarm_points]
+            if avg["field"].notna().any():
+                field = avg.dropna(subset=["field"]).copy()
+                field["field_display"] = field["field"].rolling(smooth, min_periods=1).mean()
+                field_line = (
+                    alt.Chart(field)
+                    .mark_line(color="#f59e0b", strokeWidth=2.2, strokeDash=[6, 4])
+                    .encode(
+                        x="date:T",
+                        y=alt.Y(
+                            "field_display:Q",
+                            title="Μετρήσεις πεδίου (NTU)",
+                            axis=alt.Axis(titleColor="#f59e0b", labelColor="#f59e0b"),
+                        ),
+                        tooltip=[
+                            alt.Tooltip("date:T", title="Ημερομηνία"),
+                            alt.Tooltip("field_display:Q", title="NTU", format=".3f"),
+                        ],
+                    )
+                )
+                field_points = alt.Chart(field).mark_point(color="#f59e0b", size=42, opacity=0.9).encode(
+                    x="date:T", y="field_display:Q"
+                )
+                layers.extend([field_line, field_points])
+
+            chart = alt.layer(*layers).resolve_scale(y="independent").properties(height=360)
+            st.altair_chart(_chart_cfg(chart), use_container_width=True)
+
+            if turb_alarm_rows.empty:
+                st.success("Δεν υπάρχουν alarms θολότητας πάνω από 1.85.")
+            else:
+                st.warning(f"Καταγράφηκαν {len(turb_alarm_rows)} alarms θολότητας (> 1.85).")
+                st.dataframe(
+                    pd.DataFrame(
+                        {
+                            "Ημερομηνία": turb_alarm_rows["date"].dt.strftime("%Y-%m-%d"),
+                            "Μέση NDTI": turb_alarm_rows["value"].round(3),
+                        }
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            chl_avg_for_corr = load_chl_avg(str(DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv"))
+            if turb_start is not None and turb_end is not None and not chl_avg_for_corr.empty:
+                chl_avg_for_corr = chl_avg_for_corr[
+                    (chl_avg_for_corr["date"] >= turb_start) & (chl_avg_for_corr["date"] <= turb_end)
+                ].copy()
             alarm_corr = _build_alarm_correlation(chl_avg_for_corr, avg)
             st.markdown("#### Συσχέτιση alarms χλωροφύλλης-θολότητας")
             c1, c2, c3, c4 = st.columns(2) + st.columns(2) if _is_mobile else st.columns(4)
