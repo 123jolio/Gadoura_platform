@@ -826,6 +826,38 @@ def _chart_cfg(c):
     )
 
 
+def _level_overlay_layer(start_ts: pd.Timestamp | None, end_ts: pd.Timestamp | None):
+    lvl = load_level(str(DATA_ROOT))
+    if lvl.empty:
+        return None
+    if "date" not in lvl.columns or "value" not in lvl.columns:
+        return None
+    lv = lvl[["date", "value"]].copy()
+    lv["date"] = pd.to_datetime(lv["date"], errors="coerce")
+    lv["value"] = pd.to_numeric(lv["value"], errors="coerce")
+    lv = lv.dropna(subset=["date", "value"])
+    if start_ts is not None and end_ts is not None and not lv.empty:
+        lv = lv[(lv["date"] >= start_ts) & (lv["date"] <= end_ts)].copy()
+    if lv.empty:
+        return None
+    return (
+        alt.Chart(lv)
+        .mark_line(color="#f59e0b", strokeWidth=2.1, strokeDash=[8, 4], opacity=0.95)
+        .encode(
+            x=alt.X("date:T"),
+            y=alt.Y(
+                "value:Q",
+                title="Στάθμη (m)",
+                axis=alt.Axis(orient="right", titleColor="#f59e0b", labelColor="#f59e0b"),
+            ),
+            tooltip=[
+                alt.Tooltip("date:T", title="Ημερομηνία"),
+                alt.Tooltip("value:Q", title="Στάθμη (m)", format=".3f"),
+            ],
+        )
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  UI SECTIONS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -945,6 +977,7 @@ def _legacy_section_chlorophyll_broken() -> None:
         if avg.empty:
             st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής.")
         else:
+            overlay_level = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_chl_overlay_level")
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1)
             avg = avg.copy()
             avg["display"] = avg["value"].rolling(smooth, min_periods=1).mean()
@@ -995,7 +1028,17 @@ def _legacy_section_chlorophyll_broken() -> None:
                     ],
                 )
             )
-            st.altair_chart(_chart_cfg(alt.layer(area, danger_zone, limit_rule, alarm_points)), use_container_width=True)
+            chart_layers = [area, danger_zone, limit_rule, alarm_points]
+            if overlay_level:
+                level_layer = _level_overlay_layer(chl_start, chl_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
             if chl_alarm_rows.empty:
                 st.success("Δεν υπάρχουν alarms χλωροφύλλης πάνω από 24.")
             else:
@@ -1074,6 +1117,7 @@ def _legacy_section_turbidity_broken() -> None:
         if avg.empty:
             st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής θολότητας.")
         else:
+            overlay_level = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_turb_overlay_level")
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="turb_smooth")
             avg = avg.copy()
             avg["satellite_display"] = avg["satellite"].rolling(smooth, min_periods=1).mean()
@@ -1138,6 +1182,12 @@ def _legacy_section_turbidity_broken() -> None:
                 )
                 layers.extend([field_line, field_points])
 
+            if overlay_level:
+                level_layer = _level_overlay_layer(turb_start, turb_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    layers.append(level_layer)
             chart = alt.layer(*layers).resolve_scale(y="independent").properties(height=360)
             st.altair_chart(_chart_cfg(chart), use_container_width=True)
 
@@ -1277,6 +1327,7 @@ def section_chlorophyll() -> None:
         if avg.empty:
             st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_chl_overlay_level_live")
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1)
             avg = avg.copy()
             avg["display"] = avg["value"].rolling(smooth, min_periods=1).mean()
@@ -1331,7 +1382,17 @@ def section_chlorophyll() -> None:
                     ],
                 )
             )
-            st.altair_chart(_chart_cfg(alt.layer(area, danger_zone, limit_rule, alarm_points)), use_container_width=True)
+            chart_layers = [area, danger_zone, limit_rule, alarm_points]
+            if overlay_level:
+                level_layer = _level_overlay_layer(chl_start, chl_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
             if chl_alarm_rows.empty:
                 st.success("Δεν υπάρχουν alarms χλωροφύλλης πάνω από 24.")
             else:
@@ -1435,6 +1496,7 @@ def section_turbidity() -> None:
         if avg.empty:
             st.info("Δεν βρέθηκαν δεδομένα μέσης τιμής θολότητας για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_turb_overlay_level_live")
             smooth = st.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="turb_smooth")
             avg = avg.copy()
             avg["satellite_display"] = avg["satellite"].rolling(smooth, min_periods=1).mean()
@@ -1499,6 +1561,12 @@ def section_turbidity() -> None:
                 )
                 layers.extend([field_line, field_points])
 
+            if overlay_level:
+                level_layer = _level_overlay_layer(turb_start, turb_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    layers.append(level_layer)
             chart = alt.layer(*layers).resolve_scale(y="independent").properties(height=360)
             st.altair_chart(_chart_cfg(chart), use_container_width=True)
 
@@ -1668,6 +1736,7 @@ def section_bgr() -> None:
         else:
             if avg_from_points:
                 st.caption("Η μέση τιμή BGR υπολογίστηκε από το BGR.csv (fallback, επειδή το BGR_AVERAGED.csv δεν ήταν διαθέσιμο ή έγκυρο).")
+            overlay_level = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_bgr_overlay_level")
             c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
             smooth = c1.slider("Εξομάλυνση (ημέρες)", 1, 30, 1, key="mobile_bgr_smooth")
             p90 = float(avg["value"].quantile(0.90))
@@ -1725,7 +1794,17 @@ def section_bgr() -> None:
                     ],
                 )
             )
-            st.altair_chart(_chart_cfg(alt.layer(area, limit_rule, alarm_points)), use_container_width=True)
+            chart_layers = [area, limit_rule, alarm_points]
+            if overlay_level:
+                level_layer = _level_overlay_layer(bgr_start, bgr_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
 
             if bgr_alarm_rows.empty:
                 st.success("Δεν εντοπίστηκαν υψηλές τιμές BGR πάνω από το επιλεγμένο όριο.")
