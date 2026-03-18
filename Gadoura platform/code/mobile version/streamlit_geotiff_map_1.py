@@ -1293,6 +1293,7 @@ def section_chlorophyll() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level_pts = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_chl_pts_overlay_level_live")
             c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
             sz = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4)
             op = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02)
@@ -1314,7 +1315,17 @@ def section_chlorophyll() -> None:
                 )
                 .properties(height=460)
             )
-            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            chart_layers = [ch]
+            if overlay_level_pts:
+                level_layer = _level_overlay_layer(chl_start, chl_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
             m1, m2, m3 = st.columns(3)
             m1.metric("Εγγραφές", f"{len(pts):,}")
             m2.metric("Ημερομηνίες", f"{plot['date'].nunique():,}")
@@ -1460,6 +1471,7 @@ def section_turbidity() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα θολότητας για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level_pts = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_turb_pts_overlay_level_live")
             c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
             size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="turb_size")
             opacity = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02, key="turb_opacity")
@@ -1482,7 +1494,17 @@ def section_turbidity() -> None:
                 )
                 .properties(height=460)
             )
-            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            chart_layers = [ch]
+            if overlay_level_pts:
+                level_layer = _level_overlay_layer(turb_start, turb_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
 
             m1, m2, m3 = st.columns(1) if _is_mobile else st.columns(3)
             m1.metric("Εγγραφές", f"{len(pts):,}")
@@ -1700,6 +1722,7 @@ def section_bgr() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα BGR για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level_pts = st.checkbox("Υπέρθεση στάθμης", value=False, key="mobile_bgr_pts_overlay_level")
             c1, c2 = st.columns(1) if _is_mobile else st.columns(2)
             size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="mobile_bgr_size")
             opacity = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02, key="mobile_bgr_opacity")
@@ -1721,7 +1744,17 @@ def section_bgr() -> None:
                 )
                 .properties(height=460)
             )
-            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            chart_layers = [ch]
+            if overlay_level_pts:
+                level_layer = _level_overlay_layer(bgr_start, bgr_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
             m1, m2, m3 = st.columns(1) if _is_mobile else st.columns(3)
             m1.metric("Εγγραφές", f"{len(pts):,}")
             m2.metric("Ημερομηνίες", f"{plot['date'].nunique():,}")

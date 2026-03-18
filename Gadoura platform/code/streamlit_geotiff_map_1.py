@@ -975,6 +975,7 @@ def section_chlorophyll() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level_pts = st.checkbox("Υπέρθεση στάθμης", value=False, key="chl_pts_overlay_level")
             c1, c2 = st.columns(2)
             sz = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4)
             op = c2.slider("Διαφάνεια κουκκίδας", .2, 1., .88, .02)
@@ -998,7 +999,17 @@ def section_chlorophyll() -> None:
                 )
                 .properties(height=460)
             )
-            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            chart_layers = [ch]
+            if overlay_level_pts:
+                level_layer = _level_overlay_layer(chl_start, chl_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
             m1,m2,m3 = st.columns(3)
             m1.metric("Εγγραφές",      f"{len(pts):,}")
             m2.metric("Ημερομηνίες",   f"{plot['date'].nunique():,}")
@@ -1138,6 +1149,7 @@ def section_turbidity() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα θολότητας για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level_pts = st.checkbox("Υπέρθεση στάθμης", value=False, key="turb_pts_overlay_level")
             c1, c2 = st.columns(2)
             size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="turb_size")
             opacity = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02, key="turb_opacity")
@@ -1168,7 +1180,17 @@ def section_turbidity() -> None:
                 )
                 .properties(height=460)
             )
-            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            chart_layers = [ch]
+            if overlay_level_pts:
+                level_layer = _level_overlay_layer(turb_start, turb_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
 
             m1, m2, m3 = st.columns(3)
             m1.metric("Εγγραφές", f"{len(pts):,}")
@@ -1385,6 +1407,7 @@ def section_bgr() -> None:
         if pts.empty:
             st.info("Δεν βρέθηκαν δεδομένα BGR για το επιλεγμένο χρονικό διάστημα.")
         else:
+            overlay_level_pts = st.checkbox("Υπέρθεση στάθμης", value=False, key="bgr_pts_overlay_level")
             c1, c2 = st.columns(2)
             size = c1.slider("Μέγεθος κουκκίδας", 10, 130, 58, 4, key="bgr_size")
             opacity = c2.slider("Διαφάνεια κουκκίδας", 0.2, 1.0, 0.88, 0.02, key="bgr_opacity")
@@ -1410,7 +1433,17 @@ def section_bgr() -> None:
                 )
                 .properties(height=460)
             )
-            st.altair_chart(_chart_cfg(ch), use_container_width=True)
+            chart_layers = [ch]
+            if overlay_level_pts:
+                level_layer = _level_overlay_layer(chl_start, chl_end)
+                if level_layer is None:
+                    st.info("Δεν υπάρχουν διαθέσιμα δεδομένα στάθμης στο επιλεγμένο χρονικό διάστημα.")
+                else:
+                    chart_layers.append(level_layer)
+            st.altair_chart(
+                _chart_cfg(alt.layer(*chart_layers).resolve_scale(y="independent")),
+                use_container_width=True,
+            )
             m1, m2, m3 = st.columns(3)
             m1.metric("Εγγραφές", f"{len(pts):,}")
             m2.metric("Ημερομηνίες", f"{plot['date'].nunique():,}")
@@ -1566,20 +1599,46 @@ def section_level() -> None:
     m3.metric("Ελάχιστη",   f"{dfp['value'].min():.2f} m")
     m4.metric("Μέση",       f"{dfp['value'].mean():.2f} m")
 
+    bg_mode = "Μέση τιμή ανά ημερομηνία"
+    if bg_choice != "Χωρίς":
+        bg_mode = st.selectbox(
+            "Τρόπος υποβάθρου",
+            ["Σημεία κατά μήκος γραμμής", "Μέση τιμή ανά ημερομηνία"],
+            index=0,
+            key="level_bg_mode",
+        )
+
     bg_df = pd.DataFrame()
+    bg_pts = pd.DataFrame()
     bg_title = ""
     bg_color = "#22c55e"
     if bg_choice == "Χλωροφύλλη":
-        bg_df = load_chl_avg(str(DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv")).rename(columns={"value": "bg_value"})
         bg_title = "Chl-a"
         bg_color = "#22c55e"
+        if bg_mode == "Σημεία κατά μήκος γραμμής":
+            pts = load_chl_points(str(DATA_ROOT / "VALIDATED_CHLOROPHYL.csv"))
+            if not pts.empty:
+                bg_pts = pts.rename(columns={"point": "bg_point", "chl_a": "bg_value"})
+        else:
+            bg_df = load_chl_avg(str(DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv")).rename(columns={"value": "bg_value"})
     elif bg_choice == "Θολότητα":
-        tdf = load_turbidity_avg(str(DATA_ROOT / "charts_turbidity" / "average turbidity.csv"))
-        if not tdf.empty and "satellite" in tdf.columns:
-            bg_df = tdf[["date", "satellite"]].rename(columns={"satellite": "bg_value"})
         bg_title = "NDTI"
         bg_color = "#f59e0b"
+        if bg_mode == "Σημεία κατά μήκος γραμμής":
+            pts = load_profile_points(
+                csv=str(DATA_ROOT / "charts_turbidity" / "homvoller turbidity.csv"),
+                value_regex=r"NDTI[^:]*:\s*(-?\d+(?:\.\d+)?)",
+                value_name="ndti",
+            )
+            if not pts.empty:
+                bg_pts = pts.rename(columns={"point": "bg_point", "ndti": "bg_value"})
+        else:
+            tdf = load_turbidity_avg(str(DATA_ROOT / "charts_turbidity" / "average turbidity.csv"))
+            if not tdf.empty and "satellite" in tdf.columns:
+                bg_df = tdf[["date", "satellite"]].rename(columns={"satellite": "bg_value"})
     elif bg_choice == "Λεύκανση (BGR)":
+        bg_title = "AreaBGR"
+        bg_color = "#ef4444"
         candidate_roots = [
             DATA_ROOT / "charts_BGR",
             DATA_ROOT / "charts_bgr",
@@ -1589,24 +1648,59 @@ def section_level() -> None:
         charts_root = next((root for root in candidate_roots if root.exists()), candidate_roots[0])
         avg_csv = charts_root / "BGR_AVERAGED.csv"
         points_csv = charts_root / "BGR.csv"
-        bgr_avg = load_bgr_avg(str(avg_csv))
-        if bgr_avg.empty:
-            bgr_pts = load_bgr_points(str(points_csv))
-            if not bgr_pts.empty:
-                bgr_avg = (
-                    bgr_pts.groupby("date", as_index=False)["bgr"]
-                    .mean()
-                    .rename(columns={"bgr": "value"})
-                    .sort_values("date")
-                )
-        if not bgr_avg.empty and "value" in bgr_avg.columns:
-            bg_df = bgr_avg[["date", "value"]].rename(columns={"value": "bg_value"})
-        bg_title = "AreaBGR"
-        bg_color = "#ef4444"
+        if bg_mode == "Σημεία κατά μήκος γραμμής":
+            pts = load_bgr_points(str(points_csv))
+            if not pts.empty:
+                bg_pts = pts.rename(columns={"point": "bg_point", "bgr": "bg_value"})
+        else:
+            bgr_avg = load_bgr_avg(str(avg_csv))
+            if bgr_avg.empty:
+                bgr_pts = load_bgr_points(str(points_csv))
+                if not bgr_pts.empty:
+                    bgr_avg = (
+                        bgr_pts.groupby("date", as_index=False)["bgr"]
+                        .mean()
+                        .rename(columns={"bgr": "value"})
+                        .sort_values("date")
+                    )
+            if not bgr_avg.empty and "value" in bgr_avg.columns:
+                bg_df = bgr_avg[["date", "value"]].rename(columns={"value": "bg_value"})
 
     bg_layers: list[alt.Chart] = []
     if bg_choice != "Χωρίς":
-        if not bg_df.empty:
+        if bg_mode == "Σημεία κατά μήκος γραμμής" and not bg_pts.empty:
+            bg_pts = bg_pts.copy()
+            bg_pts["date"] = pd.to_datetime(bg_pts["date"], errors="coerce")
+            bg_pts["bg_point"] = pd.to_numeric(bg_pts["bg_point"], errors="coerce")
+            bg_pts["bg_value"] = pd.to_numeric(bg_pts["bg_value"], errors="coerce")
+            bg_pts = bg_pts.dropna(subset=["date", "bg_point", "bg_value"])
+            bg_pts = bg_pts[bg_pts["bg_point"] >= 0]
+            if isinstance(drng, (list, tuple)) and len(drng) == 2:
+                bg_pts = bg_pts[(bg_pts["date"] >= pd.Timestamp(drng[0])) & (bg_pts["date"] <= pd.Timestamp(drng[1]))].copy()
+            if not bg_pts.empty:
+                if "color" in bg_pts.columns and bg_pts["color"].notna().any():
+                    bg_pts["color"] = bg_pts["color"].fillna("#6E778A")
+                    color_vals = sorted(bg_pts["color"].unique().tolist())
+                    color_enc = alt.Color("color:N", scale=alt.Scale(domain=color_vals, range=color_vals), legend=None)
+                else:
+                    color_enc = alt.Color("bg_value:Q", scale=alt.Scale(scheme="turbo"), legend=None)
+                bg_layers = [
+                    alt.Chart(bg_pts).mark_circle(size=34, opacity=0.28).encode(
+                        x=alt.X("date:T"),
+                        y=alt.Y(
+                            "bg_point:Q",
+                            title="Θέση (σημείο)",
+                            axis=alt.Axis(orient="right", titleColor="#93c5fd", labelColor="#93c5fd"),
+                        ),
+                        color=color_enc,
+                        tooltip=[
+                            alt.Tooltip("date:T", title="Ημερομηνία"),
+                            alt.Tooltip("bg_point:Q", title="Σημείο"),
+                            alt.Tooltip("bg_value:Q", title=bg_title, format=".3f"),
+                        ],
+                    )
+                ]
+        elif bg_mode == "Μέση τιμή ανά ημερομηνία" and not bg_df.empty:
             bg_df = bg_df.copy()
             bg_df["date"] = pd.to_datetime(bg_df["date"], errors="coerce")
             bg_df["bg_value"] = pd.to_numeric(bg_df["bg_value"], errors="coerce")
