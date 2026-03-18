@@ -1855,6 +1855,12 @@ def section_level() -> None:
         sm = st.slider("Εξομάλυνση (ημέρες)", 1, 90, 1)
     with c3:
         ctype = st.radio("Τύπος", ["Εμβαδόν","Γραμμή"], horizontal=True)
+    bg_choice = st.selectbox(
+        "Υπόβαθρο πίσω από τη στάθμη",
+        ["Χωρίς", "Χλωροφύλλη", "Θολότητα", "Λεύκανση (BGR)"],
+        index=0,
+        key="mobile_level_bg_series",
+    )
 
     if isinstance(drng, (list,tuple)) and len(drng)==2:
         dfp = dfp[(dfp["date"]>=pd.Timestamp(drng[0])) & (dfp["date"]<=pd.Timestamp(drng[1]))].copy()
@@ -1870,6 +1876,76 @@ def section_level() -> None:
     m2.metric("Μέγιστη",    f"{dfp['value'].max():.2f} m")
     m3.metric("Ελάχιστη",   f"{dfp['value'].min():.2f} m")
     m4.metric("Μέση",       f"{dfp['value'].mean():.2f} m")
+
+    bg_df = pd.DataFrame()
+    bg_title = ""
+    bg_color = "#22c55e"
+    if bg_choice == "Χλωροφύλλη":
+        bg_df = load_chl_avg(str(DATA_ROOT / "VALIDATED_AVERAGED CHLOROPHYLL.csv")).rename(columns={"value": "bg_value"})
+        bg_title = "Chl-a"
+        bg_color = "#22c55e"
+    elif bg_choice == "Θολότητα":
+        tdf = load_turbidity_avg(str(DATA_ROOT / "charts_turbidity" / "average turbidity.csv"))
+        if not tdf.empty and "satellite" in tdf.columns:
+            bg_df = tdf[["date", "satellite"]].rename(columns={"satellite": "bg_value"})
+        bg_title = "NDTI"
+        bg_color = "#f59e0b"
+    elif bg_choice == "Λεύκανση (BGR)":
+        candidate_roots = [
+            DATA_ROOT / "charts_BGR",
+            DATA_ROOT / "charts_bgr",
+            SATELLITE_DATA_ROOT / "DATA" / "charts_BGR",
+            SATELLITE_DATA_ROOT / "DATA" / "charts_bgr",
+        ]
+        charts_root = next((root for root in candidate_roots if root.exists()), candidate_roots[0])
+        avg_csv = charts_root / "BGR_AVERAGED.csv"
+        points_csv = charts_root / "BGR.csv"
+        bgr_avg = load_bgr_avg(str(avg_csv))
+        if bgr_avg.empty:
+            bgr_pts = load_bgr_points(str(points_csv))
+            if not bgr_pts.empty:
+                bgr_avg = (
+                    bgr_pts.groupby("date", as_index=False)["bgr"]
+                    .mean()
+                    .rename(columns={"bgr": "value"})
+                    .sort_values("date")
+                )
+        if not bgr_avg.empty and "value" in bgr_avg.columns:
+            bg_df = bgr_avg[["date", "value"]].rename(columns={"value": "bg_value"})
+        bg_title = "AreaBGR"
+        bg_color = "#ef4444"
+
+    bg_layers: list[alt.Chart] = []
+    if bg_choice != "Χωρίς":
+        if not bg_df.empty:
+            bg_df = bg_df.copy()
+            bg_df["date"] = pd.to_datetime(bg_df["date"], errors="coerce")
+            bg_df["bg_value"] = pd.to_numeric(bg_df["bg_value"], errors="coerce")
+            bg_df = bg_df.dropna(subset=["date", "bg_value"])
+            if isinstance(drng, (list, tuple)) and len(drng) == 2:
+                bg_df = bg_df[(bg_df["date"] >= pd.Timestamp(drng[0])) & (bg_df["date"] <= pd.Timestamp(drng[1]))].copy()
+            if not bg_df.empty:
+                bg_df["bg_display"] = bg_df["bg_value"].rolling(sm, min_periods=1).mean()
+                bg_layers = [
+                    alt.Chart(bg_df).mark_area(color=bg_color, opacity=0.13).encode(
+                        x=alt.X("date:T"),
+                        y=alt.Y(
+                            "bg_display:Q",
+                            title=bg_title,
+                            axis=alt.Axis(orient="right", titleColor=bg_color, labelColor=bg_color),
+                        ),
+                        tooltip=[
+                            alt.Tooltip("date:T", title="Ημερομηνία"),
+                            alt.Tooltip("bg_display:Q", title=bg_title, format=".3f"),
+                        ],
+                    ),
+                    alt.Chart(bg_df).mark_line(color=bg_color, strokeWidth=1.6, strokeDash=[7, 4], opacity=0.95).encode(
+                        x=alt.X("date:T"),
+                        y=alt.Y("bg_display:Q"),
+                    ),
+                ]
+        if not bg_layers:
+            st.info("Δεν υπάρχουν διαθέσιμα δεδομένα για το επιλεγμένο θεματικό υπόβαθρο στο εύρος ημερομηνιών.")
 
     tt = [alt.Tooltip("date:T",    title="Ημερομηνία"),
           alt.Tooltip("display:Q", title=val_lbl, format=".3f")]
@@ -1889,14 +1965,15 @@ def section_level() -> None:
     else:
         mark = base.mark_line(color="#06d6f0", strokeWidth=2.2,
                               point=alt.OverlayMarkDef(color="#06d6f0", size=25))
-    ch = (
-        mark.encode(
-            x=alt.X("date:T", title="Ημερομηνία"),
-            y=alt.Y("display:Q", title=val_lbl, scale=alt.Scale(zero=False)),
-            tooltip=tt,
-        )
-        .properties(height=320)
+    level_chart = mark.encode(
+        x=alt.X("date:T", title="Ημερομηνία"),
+        y=alt.Y("display:Q", title=val_lbl, scale=alt.Scale(zero=False)),
+        tooltip=tt,
     )
+    if bg_layers:
+        ch = alt.layer(*bg_layers, level_chart).resolve_scale(y="independent").properties(height=320)
+    else:
+        ch = level_chart.properties(height=320)
     st.altair_chart(_chart_cfg(ch), use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
